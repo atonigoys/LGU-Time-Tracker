@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <?!= include('Partial_Styles'); ?>
+</head>
+<body>
+  <div class="app-shell">
+    <?!= include('Partial_Sidebar'); ?>
+    <main class="main-content">
+      <header class="topbar">
+        <h1>Reports</h1>
+        <div class="topbar-user">
+          <div><div class="js-user-name" style="font-weight:600;"></div><div class="js-user-role text-muted" style="font-size:11.5px;"></div></div>
+          <div class="avatar js-user-avatar"></div>
+        </div>
+      </header>
+
+      <div class="page-body">
+        <div class="panel no-print">
+          <div class="panel-title">Report Filters</div>
+          <div class="filters-bar">
+            <select id="fType" onchange="loadReport()">
+              <option value="daily">Daily DTR</option>
+              <option value="monthly">Monthly DTR</option>
+              <option value="employee">Employee DTR</option>
+              <option value="department">Department Attendance</option>
+              <option value="late">Late Employees</option>
+              <option value="absences">Absences</option>
+              <option value="overtime">Overtime</option>
+            </select>
+            <input type="date" id="fFrom">
+            <input type="date" id="fTo">
+            <select id="fDept"><option value="">All Departments</option></select>
+            <select id="fEmployee"><option value="">All Employees</option></select>
+            <button class="btn" onclick="loadReport()">Run Report</button>
+            <button class="btn secondary" onclick="exportCsv()">Export CSV</button>
+            <button class="btn secondary" onclick="window.print()">Print Report</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="flex-between" style="margin-bottom:10px;">
+            <div class="panel-title" style="margin:0;" id="reportTitle">Daily DTR</div>
+            <span class="text-muted" id="rowCount"></span>
+          </div>
+          <div class="table-wrap">
+            <table id="reportTable">
+              <thead id="tblHead"></thead>
+              <tbody id="tblBody"><tr><td class="empty-state">Choose filters and click "Run Report".</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <?!= include('Partial_Scripts'); ?>
+  <script>
+    var REPORT_TITLES = {
+      daily: 'Daily DTR', monthly: 'Monthly DTR', employee: 'Employee DTR',
+      department: 'Department Attendance', late: 'Late Employees', absences: 'Absences', overtime: 'Overtime'
+    };
+    var COLUMN_SETS = {
+      default: ['Date', 'FullName', 'EmployeeID', 'Department', 'TimeIn', 'TimeOut', 'Status', 'LateMinutes', 'TotalHours', 'OvertimeHours'],
+      department: ['Department', 'Present', 'Late', 'TotalHours'],
+      absences: ['Date', 'FullName', 'EmployeeID', 'Department']
+    };
+    var lastRows = [];
+    var lastType = 'daily';
+
+    document.addEventListener('DOMContentLoaded', function () {
+      var session = initShell('reports', ['Admin', 'HR']);
+      if (!session) return;
+      var today = new Date().toISOString().slice(0, 10);
+      var monthAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+      document.getElementById('fFrom').value = monthAgo;
+      document.getElementById('fTo').value = today;
+      loadDepartments();
+      loadEmployeesList();
+      loadReport();
+    });
+
+    function loadDepartments() {
+      api('getDepartments', {}).then(function (res) {
+        var sel = document.getElementById('fDept');
+        res.departments.forEach(function (d) {
+          var opt = document.createElement('option');
+          opt.value = d.DepartmentName; opt.textContent = d.DepartmentName;
+          sel.appendChild(opt);
+        });
+      });
+    }
+    function loadEmployeesList() {
+      api('getEmployees', {}).then(function (res) {
+        var sel = document.getElementById('fEmployee');
+        res.employees.forEach(function (e) {
+          var opt = document.createElement('option');
+          opt.value = e.EmployeeID; opt.textContent = e.FullName + ' (' + e.EmployeeID + ')';
+          sel.appendChild(opt);
+        });
+      });
+    }
+
+    function currentFilters() {
+      return {
+        dateFrom: document.getElementById('fFrom').value,
+        dateTo: document.getElementById('fTo').value,
+        department: document.getElementById('fDept').value,
+        employeeId: document.getElementById('fEmployee').value
+      };
+    }
+
+    function loadReport() {
+      var type = document.getElementById('fType').value;
+      lastType = type;
+      document.getElementById('reportTitle').textContent = REPORT_TITLES[type];
+      api('getReport', { type: type, filters: currentFilters() }).then(function (res) {
+        lastRows = res.rows;
+        renderTable(type, res.rows);
+      }).catch(function (err) { toast(err.message, true); });
+    }
+
+    function renderTable(type, rows) {
+      var cols = COLUMN_SETS[type] || COLUMN_SETS.default;
+      document.getElementById('rowCount').textContent = rows.length + ' row(s)';
+      document.getElementById('tblHead').innerHTML = '<tr>' + cols.map(function (c) { return '<th>' + humanize(c) + '</th>'; }).join('') + '</tr>';
+      var tbody = document.getElementById('tblBody');
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="' + cols.length + '" class="empty-state">No data for the selected filters.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = rows.map(function (r) {
+        return '<tr>' + cols.map(function (c) {
+          if (c === 'Status') return '<td>' + statusBadge(r[c]) + '</td>';
+          if (c === 'TotalHours' || c === 'OvertimeHours' || c === 'Present' || c === 'Late') return '<td>' + (r[c] !== undefined && r[c] !== '' ? r[c] : '-') + '</td>';
+          return '<td>' + escapeHtml(r[c] !== undefined ? r[c] : '-') + '</td>';
+        }).join('') + '</tr>';
+      }).join('');
+    }
+
+    function humanize(c) {
+      return { FullName: 'Employee', EmployeeID: 'ID', TimeIn: 'Time In', TimeOut: 'Time Out', LateMinutes: 'Late (min)', TotalHours: 'Total Hrs', OvertimeHours: 'OT Hrs' }[c] || c;
+    }
+
+    function exportCsv() {
+      api('exportReportCsv', { type: lastType, filters: currentFilters() }).then(function (res) {
+        if (!res.csv) { toast('Nothing to export.', true); return; }
+        downloadDataUrl('data:text/csv;charset=utf-8,' + encodeURIComponent(res.csv), res.filename);
+      }).catch(function (err) { toast(err.message, true); });
+    }
+  </script>
+</body>
+</html>

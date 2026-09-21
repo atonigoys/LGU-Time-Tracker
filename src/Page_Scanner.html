@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <?!= include('Partial_Styles'); ?>
+  <style>
+    #qrReaderWrap { max-width: 420px; margin: 0 auto; }
+    #qrReader { border-radius: var(--radius); overflow: hidden; border: 1px solid var(--gray-200); }
+    .scan-hint { text-align: center; color: var(--gray-500); font-size: 13px; margin-top: 12px; }
+    .manual-row { display: flex; gap: 8px; margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <?!= include('Partial_Sidebar'); ?>
+    <main class="main-content">
+      <header class="topbar">
+        <h1>QR Scanner</h1>
+        <div class="topbar-user">
+          <div><div class="js-user-name" style="font-weight:600;"></div><div class="js-user-role text-muted" style="font-size:11.5px;"></div></div>
+          <div class="avatar js-user-avatar"></div>
+        </div>
+      </header>
+
+      <div class="page-body">
+        <div class="panel" id="qrReaderWrap">
+          <div class="panel-title"><span>Scan Employee QR Code</span></div>
+          <div id="qrReader"></div>
+          <div class="scan-hint">Point the badge's QR code at the camera. Attendance is recorded automatically.</div>
+          <div class="manual-row">
+            <input type="text" id="manualToken" placeholder="Or paste/enter QR token manually…">
+            <button class="btn secondary" onclick="submitManual()">Submit</button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div class="confirm-overlay" id="confirmOverlay">
+    <div class="confirm-card" id="confirmCard"></div>
+  </div>
+
+  <?!= include('Partial_Scripts'); ?>
+  <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script>
+    var scanner = null;
+    var busy = false;
+    var presetToken = <?!= JSON.stringify(scanToken || '') ?>;
+
+    document.addEventListener('DOMContentLoaded', function () {
+      var session = initShell('scanner', ['Admin', 'HR']);
+      if (!session) return;
+      startScanner();
+      if (presetToken) handleToken(extractToken(presetToken));
+    });
+
+    function extractToken(text) {
+      var match = String(text).match(/[?&]token=([^&]+)/);
+      return match ? decodeURIComponent(match[1]) : text;
+    }
+
+    function startScanner() {
+      try {
+        scanner = new Html5Qrcode('qrReader');
+        scanner.start(
+          { facingMode: 'environment' },
+          { fps: 10, qrbox: { width: 240, height: 240 } },
+          function (decodedText) { handleToken(extractToken(decodedText)); },
+          function () { /* ignore per-frame scan misses */ }
+        ).catch(function (err) {
+          document.getElementById('qrReader').innerHTML =
+            '<div class="empty-state">Camera unavailable. Use the manual entry field below.<br><span style="font-size:11px;">' + escapeHtml(String(err)) + '</span></div>';
+        });
+      } catch (e) {
+        document.getElementById('qrReader').innerHTML = '<div class="empty-state">Camera not supported on this device. Use manual entry below.</div>';
+      }
+    }
+
+    function submitManual() {
+      var val = document.getElementById('manualToken').value.trim();
+      if (val) handleToken(extractToken(val));
+    }
+
+    function handleToken(token) {
+      if (busy) return;
+      busy = true;
+      api('scanQR', { qrToken: token, device: navigator.userAgent.substring(0, 60) })
+        .then(function (res) { showConfirmation(res); })
+        .catch(function (err) { showError(err.message); })
+        .then(function () {
+          setTimeout(function () { busy = false; hideConfirmation(); }, 3000);
+        });
+    }
+
+    function showConfirmation(res) {
+      var record = res.record;
+      var isIn = res.action === 'TIME_IN';
+      var statusClass = isIn ? (record.Status === 'LATE' ? 'late' : 'present') : 'out';
+      var html = '<div class="confirm-icon">' + (isIn ? '✓' : '✓') + '</div>' +
+        '<h2>' + (isIn ? 'TIME IN RECORDED' : 'TIME OUT RECORDED') + '</h2>' +
+        '<div class="name">' + escapeHtml(res.employee.fullName) + '</div>' +
+        '<div class="meta">Employee ID: ' + escapeHtml(res.employee.employeeId) + '</div>' +
+        '<div class="meta">' + escapeHtml(res.employee.department) + '</div>' +
+        '<div class="time">' + escapeHtml(isIn ? record.TimeIn : record.TimeOut) + '</div>';
+      if (isIn) {
+        html += '<div class="confirm-status ' + statusClass + '">' + escapeHtml(record.Status) + (record.LateMinutes ? ' · ' + record.LateMinutes + ' min late' : '') + '</div>';
+      } else {
+        html += '<div class="meta">Total Hours: ' + record.TotalHours + 'h' + (record.OvertimeHours > 0 ? ' (+' + record.OvertimeHours + 'h OT)' : '') + '</div>' +
+          '<div class="confirm-status out">TIME OUT</div>';
+      }
+      document.getElementById('confirmCard').innerHTML = html;
+      document.getElementById('confirmOverlay').classList.add('show');
+    }
+
+    function showError(message) {
+      document.getElementById('confirmCard').innerHTML =
+        '<div class="confirm-icon">⚠️</div><h2>Scan Not Recorded</h2><div class="meta">' + escapeHtml(message) + '</div>' +
+        '<div class="confirm-status error">TRY AGAIN</div>';
+      document.getElementById('confirmOverlay').classList.add('show');
+    }
+
+    function hideConfirmation() {
+      document.getElementById('confirmOverlay').classList.remove('show');
+      document.getElementById('manualToken').value = '';
+    }
+  </script>
+</body>
+</html>

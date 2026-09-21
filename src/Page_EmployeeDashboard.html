@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <?!= include('Partial_Styles'); ?>
+  <style>
+    .greeting-panel { background: linear-gradient(135deg, var(--green-800), var(--green-600)); color: #fff; border-radius: var(--radius); padding: 24px; margin-bottom: 18px; }
+    .greeting-panel h2 { margin: 0 0 4px; font-size: 22px; }
+    .greeting-panel .clock { font-size: 30px; font-weight: 800; margin-top: 10px; }
+    .greeting-panel .date { opacity: 0.9; font-size: 14px; }
+    .status-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-top: 16px; }
+    .status-box { background: rgba(255,255,255,0.14); border-radius: var(--radius-sm); padding: 12px 14px; }
+    .status-box .lbl { font-size: 11px; opacity: 0.85; text-transform: uppercase; }
+    .status-box .val { font-size: 18px; font-weight: 700; margin-top: 3px; }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <?!= include('Partial_Sidebar'); ?>
+    <main class="main-content">
+      <header class="topbar">
+        <h1>My Dashboard</h1>
+        <div class="topbar-user">
+          <div><div class="js-user-name" style="font-weight:600;"></div><div class="js-user-role text-muted" style="font-size:11.5px;"></div></div>
+          <div class="avatar js-user-avatar"></div>
+        </div>
+      </header>
+
+      <div class="page-body">
+        <div class="greeting-panel">
+          <h2 id="greeting">Hello!</h2>
+          <div class="date" id="dateLine">–</div>
+          <div class="clock" id="clockLine">--:--:--</div>
+          <div class="status-row">
+            <div class="status-box"><div class="lbl">Today's Status</div><div class="val" id="stStatus">–</div></div>
+            <div class="status-box"><div class="lbl">Time In</div><div class="val" id="stIn">–</div></div>
+            <div class="status-box"><div class="lbl">Time Out</div><div class="val" id="stOut">–</div></div>
+            <div class="status-box"><div class="lbl">Total Hours</div><div class="val" id="stHours">–</div></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="flex-between">
+            <div class="panel-title" style="margin:0;">Recent Attendance</div>
+            <button class="btn small secondary" onclick="gotoPage('my-attendance')">View Full DTR</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Date</th><th>Time In</th><th>Time Out</th><th>Status</th><th>Total Hrs</th></tr></thead>
+              <tbody id="tblBody"><tr><td colspan="5" class="empty-state">Loading…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <?!= include('Partial_Scripts'); ?>
+  <script>
+    var clockOffset = 0;
+
+    document.addEventListener('DOMContentLoaded', function () {
+      var session = initShell('employee-dashboard', ['Employee']);
+      if (!session) return;
+      var firstName = (session.user.fullName || '').split(' ')[0];
+      loadStatus(firstName);
+      loadHistory();
+      setInterval(tickClock, 1000);
+    });
+
+    function loadStatus(firstName) {
+      api('getMyTodayStatus', {}).then(function (res) {
+        var serverNow = new Date(res.serverDate + ' ' + res.serverTime);
+        clockOffset = serverNow.getTime() - Date.now();
+        var hour = serverNow.getHours();
+        var greeting = hour < 12 ? 'Good Morning' : (hour < 18 ? 'Good Afternoon' : 'Good Evening');
+        document.getElementById('greeting').textContent = greeting + ', ' + firstName + '!';
+        document.getElementById('dateLine').textContent = res.serverDate;
+        tickClock();
+
+        var rec = res.today;
+        document.getElementById('stStatus').innerHTML = rec ? statusBadgeLight(rec.Status) : 'Not Timed In';
+        document.getElementById('stIn').textContent = rec && rec.TimeIn ? rec.TimeIn : '–';
+        document.getElementById('stOut').textContent = rec && rec.TimeOut ? rec.TimeOut : '–';
+        document.getElementById('stHours').textContent = rec && rec.TotalHours ? rec.TotalHours + 'h' : '–';
+      }).catch(function (err) { toast(err.message, true); });
+    }
+
+    function statusBadgeLight(status) {
+      return '<span style="color:#fff;">' + escapeHtml(status) + '</span>';
+    }
+
+    function tickClock() {
+      var now = new Date(Date.now() + clockOffset);
+      document.getElementById('clockLine').textContent = now.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
+
+    function loadHistory() {
+      api('getMyAttendance', {}).then(function (res) {
+        var rows = res.attendance.slice(0, 7);
+        var tbody = document.getElementById('tblBody');
+        if (!rows.length) { tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No attendance history yet.</td></tr>'; return; }
+        tbody.innerHTML = rows.map(function (r) {
+          return '<tr>' +
+            '<td>' + escapeHtml(r.Date) + '</td>' +
+            '<td>' + escapeHtml(r.TimeIn || '-') + '</td>' +
+            '<td>' + escapeHtml(r.TimeOut || '-') + '</td>' +
+            '<td>' + statusBadge(r.Status) + '</td>' +
+            '<td>' + (r.TotalHours || '-') + '</td>' +
+            '</tr>';
+        }).join('');
+      }).catch(function (err) { toast(err.message, true); });
+    }
+  </script>
+</body>
+</html>

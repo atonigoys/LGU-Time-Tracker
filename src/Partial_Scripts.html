@@ -1,0 +1,203 @@
+<script>
+  // ---------------------------------------------------------------------
+  // LGU shared client runtime: session storage, API calls, small UI utils.
+  // Included on every page via <?!= include('Partial_Scripts'); ?>
+  // ---------------------------------------------------------------------
+  var LGU = (function () {
+    var SESSION_KEY = 'lgu_session';
+
+    function getSession() {
+      try {
+        var raw = localStorage.getItem(SESSION_KEY);
+        return raw ? JSON.parse(raw) : null;
+      } catch (e) { return null; }
+    }
+    function setSession(session) {
+      localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    }
+    function clearSession() {
+      localStorage.removeItem(SESSION_KEY);
+    }
+    function getToken() {
+      var s = getSession();
+      return s ? s.token : null;
+    }
+    function getUser() {
+      var s = getSession();
+      return s ? s.user : null;
+    }
+    return { getSession: getSession, setSession: setSession, clearSession: clearSession, getToken: getToken, getUser: getUser };
+  })();
+
+  /**
+   * Navigates the top-level page to ?page=X, reloading the whole app shell.
+   * The page runs in a sandboxed cross-origin iframe, so we can WRITE
+   * window.top.location (browsers allow navigating a frame you can't read)
+   * but cannot READ window.top.location.href to find our own base URL - we
+   * ask the server for it instead, via google.script.run.
+   */
+  var _lguWebAppUrlCache = null;
+  function gotoPage(page) {
+    if (_lguWebAppUrlCache) {
+      window.top.location.href = _lguWebAppUrlCache + '?page=' + encodeURIComponent(page);
+      return;
+    }
+    google.script.run
+      .withSuccessHandler(function (url) {
+        _lguWebAppUrlCache = url;
+        window.top.location.href = url + '?page=' + encodeURIComponent(page);
+      })
+      .withFailureHandler(function () {
+        alert('Navigation failed. Please refresh the page and try again.');
+      })
+      .getWebAppUrlForClient();
+  }
+
+  /** Raw google.script.run bridge -> Promise. */
+  function rpc(action, payload) {
+    return new Promise(function (resolve, reject) {
+      if (typeof google === 'undefined' || !google.script || !google.script.run) {
+        reject(new Error('Open this app from its deployed Web App URL.'));
+        return;
+      }
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(function (err) { reject(new Error(err && err.message ? err.message : String(err))); })
+        .apiCall(action, payload || {});
+    });
+  }
+
+  /** Main API call helper: injects the session token and normalizes errors. */
+  function api(action, payload) {
+    payload = Object.assign({}, payload || {});
+    var token = LGU.getToken();
+    if (token && !payload.token) payload.token = token;
+    return rpc(action, payload).then(function (res) {
+      if (!res || !res.success) {
+        var msg = (res && res.error) || 'Something went wrong.';
+        if (/expired|log in again/i.test(msg)) {
+          LGU.clearSession();
+          gotoPage('login');
+        }
+        throw new Error(msg);
+      }
+      return res;
+    });
+  }
+
+  function toast(message, isError) {
+    var host = document.getElementById('toastHost');
+    if (!host) {
+      host = document.createElement('div');
+      host.id = 'toastHost';
+      host.className = 'toast-host';
+      document.body.appendChild(host);
+    }
+    var el = document.createElement('div');
+    el.className = 'toast' + (isError ? ' error' : '');
+    el.textContent = message;
+    host.appendChild(el);
+    setTimeout(function () { el.remove(); }, 3800);
+  }
+
+  function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function statusBadge(status) {
+    var cls = { PRESENT: 'present', LATE: 'late', ABSENT: 'absent' }[status] || 'inactive';
+    return '<span class="badge ' + cls + '">' + escapeHtml(status || '-') + '</span>';
+  }
+
+  function statusPill(status) {
+    var cls = String(status).toLowerCase() === 'active' ? 'active' : 'inactive';
+    return '<span class="badge ' + cls + '">' + escapeHtml(status) + '</span>';
+  }
+
+  function initials(name) {
+    if (!name) return '?';
+    var parts = String(name).trim().split(/\s+/);
+    return (parts[0][0] + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
+  }
+
+  function downloadDataUrl(dataUrl, filename) {
+    var a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  function printQrCard(dataUrl, meta) {
+    var w = window.open('', '_blank', 'width=420,height=560');
+    if (!w) { toast('Please allow pop-ups to print the QR code.', true); return; }
+    w.document.write(
+      '<html><head><title>' + escapeHtml(meta.fullName) + ' - QR Code</title><style>' +
+      'body{font-family:Segoe UI,Arial,sans-serif;text-align:center;padding:30px;}' +
+      '.org{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#555;}' +
+      '.name{font-size:20px;font-weight:700;margin:10px 0 2px;color:#14532d;}' +
+      '.meta{font-size:13px;color:#555;margin-bottom:14px;}' +
+      'img{width:220px;height:220px;}' +
+      '.hint{font-size:12px;color:#777;margin-top:10px;}' +
+      '</style></head><body>' +
+      '<div class="org">LGU Time Tracker</div>' +
+      '<div class="name">' + escapeHtml(meta.fullName) + '</div>' +
+      '<div class="meta">' + escapeHtml(meta.employeeId) + ' &middot; ' + escapeHtml(meta.department) + '</div>' +
+      '<img src="' + dataUrl + '">' +
+      '<div class="hint">Scan to record attendance</div>' +
+      '</body></html>'
+    );
+    w.document.close();
+    w.onload = function () { w.focus(); w.print(); };
+    setTimeout(function () { try { w.focus(); w.print(); } catch (e) {} }, 400);
+  }
+
+  function buildScanUrl(webAppUrl, token) {
+    if (!webAppUrl) return token;
+    return webAppUrl + '?page=scanner&token=' + encodeURIComponent(token);
+  }
+
+  /**
+   * Guards a protected page: redirects to login if no session, or to the
+   * user's own dashboard if their role isn't allowed on this page. Also
+   * wires up the topbar user chip, sidebar/bottom-nav active state and role
+   * visibility, and the logout button. Call once per page on DOMContentLoaded.
+   */
+  function initShell(activePage, allowedRoles) {
+    var session = LGU.getSession();
+    if (!session || !session.token) { gotoPage('login'); return null; }
+    if (allowedRoles && allowedRoles.indexOf(session.user.role) === -1) {
+      gotoPage(session.user.role === 'Employee' ? 'employee-dashboard' : 'dashboard');
+      return null;
+    }
+
+    document.querySelectorAll('[data-role-nav]').forEach(function (el) {
+      var roles = el.getAttribute('data-role-nav').split(',');
+      el.style.display = roles.indexOf(session.user.role) > -1 ? '' : 'none';
+    });
+    document.querySelectorAll('[data-nav-page]').forEach(function (el) {
+      el.classList.toggle('active', el.getAttribute('data-nav-page') === activePage);
+    });
+    document.querySelectorAll('.js-user-name').forEach(function (el) { el.textContent = session.user.fullName; });
+    document.querySelectorAll('.js-user-role').forEach(function (el) { el.textContent = session.user.role; });
+    document.querySelectorAll('.js-user-avatar').forEach(function (el) { el.textContent = initials(session.user.fullName); });
+    document.querySelectorAll('.js-logout').forEach(function (el) {
+      el.addEventListener('click', function (ev) {
+        ev.preventDefault();
+        api('logout', {}).catch(function(){}).then(function () {
+          LGU.clearSession();
+          gotoPage('login');
+        });
+      });
+    });
+
+    // Keep the session token fresh; if the server says it's gone, bounce to login.
+    api('getCurrentUser', {}).catch(function () {});
+
+    return session;
+  }
+</script>

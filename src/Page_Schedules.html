@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <?!= include('Partial_Styles'); ?>
+</head>
+<body>
+  <div class="app-shell">
+    <?!= include('Partial_Sidebar'); ?>
+    <main class="main-content">
+      <header class="topbar">
+        <h1>Work Schedules</h1>
+        <div class="topbar-user">
+          <div><div class="js-user-name" style="font-weight:600;"></div><div class="js-user-role text-muted" style="font-size:11.5px;"></div></div>
+          <div class="avatar js-user-avatar"></div>
+        </div>
+      </header>
+
+      <div class="page-body">
+        <div class="panel">
+          <div class="panel-title">Add / Update Schedule</div>
+          <form id="schedForm">
+            <input type="hidden" id="fScheduleId">
+            <div class="form-grid">
+              <div class="form-row"><label>Schedule Name</label><input type="text" id="fName" required placeholder="Regular (8AM-5PM)"></div>
+              <div class="form-row"><label>Start Time</label><input type="time" id="fStart" required value="08:00"></div>
+              <div class="form-row"><label>End Time</label><input type="time" id="fEnd" required value="17:00"></div>
+              <div class="form-row"><label>Lunch Start</label><input type="time" id="fLunchStart" value="12:00"></div>
+              <div class="form-row"><label>Lunch End</label><input type="time" id="fLunchEnd" value="13:00"></div>
+              <div class="form-row"><label>Grace Period (minutes)</label><input type="number" id="fGrace" value="15" min="0"></div>
+              <div class="form-row"><label>Status</label>
+                <select id="fStatus"><option value="Active">Active</option><option value="Inactive">Inactive</option></select>
+              </div>
+            </div>
+            <button type="submit" class="btn">Save Schedule</button>
+            <button type="button" class="btn ghost" onclick="resetForm()">Clear</button>
+          </form>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title">All Schedules</div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Start</th><th>End</th><th>Lunch</th><th>Grace (min)</th><th>Status</th><th></th></tr></thead>
+              <tbody id="tblBody"><tr><td colspan="7" class="empty-state">Loading…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <?!= include('Partial_Scripts'); ?>
+  <script>
+    var schedules = [];
+
+    document.addEventListener('DOMContentLoaded', function () {
+      var session = initShell('schedules', ['Admin']);
+      if (!session) return;
+      loadSchedules();
+      document.getElementById('schedForm').addEventListener('submit', saveSchedule);
+    });
+
+    function loadSchedules() {
+      api('getSchedules', {}).then(function (res) {
+        schedules = res.schedules;
+        renderTable();
+      }).catch(function (err) { toast(err.message, true); });
+    }
+
+    function renderTable() {
+      var tbody = document.getElementById('tblBody');
+      if (!schedules.length) { tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No schedules yet.</td></tr>'; return; }
+      tbody.innerHTML = schedules.map(function (s) {
+        return '<tr>' +
+          '<td><strong>' + escapeHtml(s.ScheduleName) + '</strong></td>' +
+          '<td>' + escapeHtml(s.StartTime) + '</td>' +
+          '<td>' + escapeHtml(s.EndTime) + '</td>' +
+          '<td>' + escapeHtml(s.LunchStart) + ' - ' + escapeHtml(s.LunchEnd) + '</td>' +
+          '<td>' + escapeHtml(s.GraceMinutes) + '</td>' +
+          '<td>' + statusPill(s.Status) + '</td>' +
+          '<td><button class="btn small secondary" onclick="editSchedule(\'' + s.ScheduleID + '\')">Edit</button></td>' +
+          '</tr>';
+      }).join('');
+    }
+
+    function editSchedule(id) {
+      var s = schedules.filter(function (x) { return x.ScheduleID === id; })[0];
+      if (!s) return;
+      document.getElementById('fScheduleId').value = s.ScheduleID;
+      document.getElementById('fName').value = s.ScheduleName;
+      document.getElementById('fStart').value = s.StartTime;
+      document.getElementById('fEnd').value = s.EndTime;
+      document.getElementById('fLunchStart').value = s.LunchStart;
+      document.getElementById('fLunchEnd').value = s.LunchEnd;
+      document.getElementById('fGrace').value = s.GraceMinutes;
+      document.getElementById('fStatus').value = s.Status;
+      window.scrollTo(0, 0);
+    }
+
+    function resetForm() {
+      document.getElementById('schedForm').reset();
+      document.getElementById('fScheduleId').value = '';
+    }
+
+    function saveSchedule(e) {
+      e.preventDefault();
+      var data = {
+        ScheduleID: document.getElementById('fScheduleId').value || undefined,
+        ScheduleName: document.getElementById('fName').value.trim(),
+        StartTime: document.getElementById('fStart').value,
+        EndTime: document.getElementById('fEnd').value,
+        LunchStart: document.getElementById('fLunchStart').value,
+        LunchEnd: document.getElementById('fLunchEnd').value,
+        GraceMinutes: Number(document.getElementById('fGrace').value || 0),
+        Status: document.getElementById('fStatus').value
+      };
+      api('saveSchedule', { data: data }).then(function () {
+        toast('Schedule saved.');
+        resetForm();
+        loadSchedules();
+      }).catch(function (err) { toast(err.message, true); });
+    }
+  </script>
+</body>
+</html>

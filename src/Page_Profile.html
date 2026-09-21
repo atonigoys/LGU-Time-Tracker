@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <?!= include('Partial_Styles'); ?>
+</head>
+<body>
+  <div class="app-shell">
+    <?!= include('Partial_Sidebar'); ?>
+    <main class="main-content">
+      <header class="topbar">
+        <h1>My Profile</h1>
+        <div class="topbar-user">
+          <div><div class="js-user-name" style="font-weight:600;"></div><div class="js-user-role text-muted" style="font-size:11.5px;"></div></div>
+          <div class="avatar js-user-avatar"></div>
+        </div>
+      </header>
+
+      <div class="page-body">
+        <div class="panel">
+          <div class="panel-title">Profile Information</div>
+          <div class="form-grid" id="profileInfo">
+            <div class="form-row"><label>Full Name</label><div id="pName">–</div></div>
+            <div class="form-row"><label>Employee ID</label><div id="pId">–</div></div>
+            <div class="form-row"><label>Email</label><div id="pEmail">–</div></div>
+            <div class="form-row"><label>Position</label><div id="pPosition">–</div></div>
+            <div class="form-row"><label>Department</label><div id="pDept">–</div></div>
+            <div class="form-row"><label>Status</label><div id="pStatus">–</div></div>
+          </div>
+          <p class="text-muted" style="font-size:12px;">To update your name, position, or department, contact your HR administrator.</p>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title">Change Password</div>
+          <form id="pwForm">
+            <div class="form-grid">
+              <div class="form-row"><label>Current Password</label><input type="password" id="fOld" required></div>
+              <div class="form-row"><label>New Password</label><input type="password" id="fNew" required minlength="8"></div>
+            </div>
+            <button type="submit" class="btn">Update Password</button>
+          </form>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <?!= include('Partial_Scripts'); ?>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      var session = initShell('profile', ['Employee']);
+      if (!session) return;
+      api('getMyQR', {}).then(function (res) {
+        var e = res.employee;
+        document.getElementById('pName').textContent = e.FullName;
+        document.getElementById('pId').textContent = e.EmployeeID;
+        document.getElementById('pEmail').textContent = e.Email;
+        document.getElementById('pPosition').textContent = e.Position || '-';
+        document.getElementById('pDept').textContent = e.Department;
+        document.getElementById('pStatus').innerHTML = statusPill(e.Status);
+      }).catch(function (err) { toast(err.message, true); });
+
+      document.getElementById('pwForm').addEventListener('submit', function (e) {
+        e.preventDefault();
+        api('changePassword', { oldPassword: document.getElementById('fOld').value, newPassword: document.getElementById('fNew').value })
+          .then(function () { toast('Password updated.'); document.getElementById('pwForm').reset(); })
+          .catch(function (err) { toast(err.message, true); });
+      });
+    });
+  </script>
+</body>
+</html>

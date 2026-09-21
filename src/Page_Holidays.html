@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <?!= include('Partial_Styles'); ?>
+</head>
+<body>
+  <div class="app-shell">
+    <?!= include('Partial_Sidebar'); ?>
+    <main class="main-content">
+      <header class="topbar">
+        <h1>Holidays</h1>
+        <div class="topbar-user">
+          <div><div class="js-user-name" style="font-weight:600;"></div><div class="js-user-role text-muted" style="font-size:11.5px;"></div></div>
+          <div class="avatar js-user-avatar"></div>
+        </div>
+      </header>
+
+      <div class="page-body">
+        <div class="panel">
+          <div class="panel-title">Add Holiday</div>
+          <form id="holForm">
+            <div class="form-grid">
+              <div class="form-row"><label>Date</label><input type="date" id="fDate" required></div>
+              <div class="form-row"><label>Holiday Name</label><input type="text" id="fName" required></div>
+              <div class="form-row"><label>Type</label>
+                <select id="fType"><option value="Regular">Regular Holiday</option><option value="Special">Special Non-Working</option></select>
+              </div>
+            </div>
+            <button type="submit" class="btn">Add Holiday</button>
+          </form>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title">Holiday Calendar</div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Date</th><th>Holiday</th><th>Type</th><th>Status</th><th></th></tr></thead>
+              <tbody id="tblBody"><tr><td colspan="5" class="empty-state">Loading…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <?!= include('Partial_Scripts'); ?>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      var session = initShell('holidays', ['Admin', 'HR']);
+      if (!session) return;
+      loadHolidays();
+      document.getElementById('holForm').addEventListener('submit', saveHoliday);
+    });
+
+    function loadHolidays() {
+      api('getHolidays', {}).then(function (res) {
+        var rows = res.holidays.sort(function (a, b) { return String(a.Date).localeCompare(String(b.Date)); });
+        renderTable(rows);
+      }).catch(function (err) { toast(err.message, true); });
+    }
+
+    function renderTable(rows) {
+      var tbody = document.getElementById('tblBody');
+      if (!rows.length) { tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No holidays configured.</td></tr>'; return; }
+      tbody.innerHTML = rows.map(function (h) {
+        return '<tr>' +
+          '<td>' + escapeHtml(h.Date) + '</td>' +
+          '<td>' + escapeHtml(h.HolidayName) + '</td>' +
+          '<td>' + escapeHtml(h.Type) + '</td>' +
+          '<td>' + statusPill(h.Status) + '</td>' +
+          '<td><button class="btn small danger" onclick="removeHoliday(\'' + h.HolidayID + '\')">Delete</button></td>' +
+          '</tr>';
+      }).join('');
+    }
+
+    function saveHoliday(e) {
+      e.preventDefault();
+      var data = {
+        Date: document.getElementById('fDate').value,
+        HolidayName: document.getElementById('fName').value.trim(),
+        Type: document.getElementById('fType').value
+      };
+      api('saveHoliday', { data: data }).then(function () {
+        toast('Holiday added.');
+        document.getElementById('holForm').reset();
+        loadHolidays();
+      }).catch(function (err) { toast(err.message, true); });
+    }
+
+    function removeHoliday(id) {
+      if (!confirm('Delete this holiday?')) return;
+      api('deleteHoliday', { holidayId: id }).then(function () {
+        toast('Holiday deleted.');
+        loadHolidays();
+      }).catch(function (err) { toast(err.message, true); });
+    }
+  </script>
+</body>
+</html>

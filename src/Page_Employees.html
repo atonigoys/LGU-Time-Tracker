@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <?!= include('Partial_Styles'); ?>
+</head>
+<body>
+  <div class="app-shell">
+    <?!= include('Partial_Sidebar'); ?>
+    <main class="main-content">
+      <header class="topbar">
+        <h1>Employee Management</h1>
+        <div class="topbar-user">
+          <div><div class="js-user-name" style="font-weight:600;"></div><div class="js-user-role text-muted" style="font-size:11.5px;"></div></div>
+          <div class="avatar js-user-avatar"></div>
+        </div>
+      </header>
+
+      <div class="page-body">
+        <div class="panel">
+          <div class="flex-between" style="margin-bottom:14px;">
+            <div class="panel-title" style="margin:0;">All Employees</div>
+            <button class="btn" onclick="openEmployeeModal()">+ Add Employee</button>
+          </div>
+          <div class="filters-bar">
+            <input type="text" id="fSearch" placeholder="Search name or ID…" oninput="renderTable()">
+            <select id="fDept" onchange="renderTable()"><option value="">All Departments</option></select>
+            <select id="fStatus" onchange="renderTable()">
+              <option value="">All Statuses</option>
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+            </select>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Employee</th><th>Department</th><th>Position</th><th>Role</th><th>Status</th><th>Actions</th></tr></thead>
+              <tbody id="tblBody"><tr><td colspan="6" class="empty-state">Loading…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Add/Edit modal -->
+  <div class="modal-backdrop" id="empModalBackdrop">
+    <div class="modal">
+      <h3 id="empModalTitle">Add Employee</h3>
+      <form id="empForm">
+        <input type="hidden" id="editingId">
+        <div class="form-grid">
+          <div class="form-row"><label>Full Name</label><input type="text" id="fFullName" required></div>
+          <div class="form-row"><label>Email</label><input type="email" id="fEmail" required></div>
+          <div class="form-row"><label>Position</label><input type="text" id="fPosition"></div>
+          <div class="form-row"><label>Department</label><select id="fDeptSelect" required></select></div>
+          <div class="form-row"><label>Role</label>
+            <select id="fRole" required>
+              <option value="Employee">Employee</option>
+              <option value="HR">HR</option>
+              <option value="Admin">Admin</option>
+            </select>
+          </div>
+          <div class="form-row" id="empIdRow"><label>Employee ID (optional)</label><input type="text" id="fEmployeeId" placeholder="Auto-generated if blank"></div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn secondary" onclick="closeEmployeeModal()">Cancel</button>
+          <button type="submit" class="btn" id="empSaveBtn">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- QR modal -->
+  <div class="modal-backdrop" id="qrModalBackdrop">
+    <div class="modal" style="text-align:center;">
+      <h3>Employee QR Code</h3>
+      <div class="qr-card" id="qrCardContent"></div>
+      <div class="modal-actions" style="justify-content:center;">
+        <button class="btn secondary" onclick="regenerateCurrentQR()">Regenerate</button>
+        <button class="btn secondary" onclick="downloadCurrentQR()">Download</button>
+        <button class="btn" onclick="printCurrentQR()">Print</button>
+      </div>
+      <div class="modal-actions" style="justify-content:center;">
+        <button class="btn ghost" onclick="closeQrModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Temp password modal -->
+  <div class="modal-backdrop" id="pwModalBackdrop">
+    <div class="modal" style="text-align:center;">
+      <h3>Temporary Password</h3>
+      <p class="text-muted">Share this password securely with the employee. They should change it after logging in.</p>
+      <div style="font-size:22px;font-weight:800;letter-spacing:.05em;color:var(--green-800);background:var(--green-50);padding:14px;border-radius:var(--radius-sm);" id="tempPwValue"></div>
+      <div class="modal-actions" style="justify-content:center;"><button class="btn" onclick="closePwModal()">Done</button></div>
+    </div>
+  </div>
+
+  <?!= include('Partial_Scripts'); ?>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <script>
+    var allEmployees = [];
+    var departments = [];
+    var webAppUrl = <?!= JSON.stringify(webAppUrl || '') ?>;
+    var currentQrEmployee = null;
+
+    document.addEventListener('DOMContentLoaded', function () {
+      var session = initShell('employees', ['Admin', 'HR']);
+      if (!session) return;
+      loadDepartments();
+      loadEmployees();
+      document.getElementById('empForm').addEventListener('submit', saveEmployee);
+    });
+
+    function loadDepartments() {
+      api('getDepartments', {}).then(function (res) {
+        departments = res.departments;
+        ['fDept', 'fDeptSelect'].forEach(function (id) {
+          var sel = document.getElementById(id);
+          departments.forEach(function (d) {
+            var opt = document.createElement('option');
+            opt.value = d.DepartmentName; opt.textContent = d.DepartmentName;
+            sel.appendChild(opt);
+          });
+        });
+      });
+    }
+
+    function loadEmployees() {
+      api('getEmployees', {}).then(function (res) {
+        allEmployees = res.employees;
+        renderTable();
+      }).catch(function (err) { toast(err.message, true); });
+    }
+
+    function renderTable() {
+      var q = document.getElementById('fSearch').value.toLowerCase();
+      var dept = document.getElementById('fDept').value;
+      var status = document.getElementById('fStatus').value;
+      var rows = allEmployees.filter(function (e) {
+        if (dept && e.Department !== dept) return false;
+        if (status && e.Status !== status) return false;
+        if (q && e.FullName.toLowerCase().indexOf(q) === -1 && e.EmployeeID.toLowerCase().indexOf(q) === -1) return false;
+        return true;
+      });
+      var tbody = document.getElementById('tblBody');
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No employees match your filters.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = rows.map(function (e) {
+        return '<tr>' +
+          '<td><strong>' + escapeHtml(e.FullName) + '</strong><br><span class="text-muted" style="font-size:11.5px;">' + escapeHtml(e.EmployeeID) + ' &middot; ' + escapeHtml(e.Email) + '</span></td>' +
+          '<td>' + escapeHtml(e.Department) + '</td>' +
+          '<td>' + escapeHtml(e.Position || '-') + '</td>' +
+          '<td>' + escapeHtml(e.Role) + '</td>' +
+          '<td>' + statusPill(e.Status) + '</td>' +
+          '<td>' +
+            '<button class="btn small secondary" onclick="openEmployeeModal(\'' + e.EmployeeID + '\')">Edit</button> ' +
+            '<button class="btn small secondary" onclick="openQrModal(\'' + e.EmployeeID + '\')">QR</button> ' +
+            '<button class="btn small secondary" onclick="doResetPassword(\'' + e.EmployeeID + '\')">Reset PW</button> ' +
+            (e.Status === 'Active'
+              ? '<button class="btn small danger" onclick="toggleStatus(\'' + e.EmployeeID + '\',\'deactivateEmployee\')">Deactivate</button>'
+              : '<button class="btn small" onclick="toggleStatus(\'' + e.EmployeeID + '\',\'activateEmployee\')">Activate</button>') +
+          '</td>' +
+          '</tr>';
+      }).join('');
+    }
+
+    function openEmployeeModal(employeeId) {
+      var editing = employeeId ? allEmployees.filter(function (e) { return e.EmployeeID === employeeId; })[0] : null;
+      document.getElementById('empModalTitle').textContent = editing ? 'Edit Employee' : 'Add Employee';
+      document.getElementById('editingId').value = editing ? editing.EmployeeID : '';
+      document.getElementById('fFullName').value = editing ? editing.FullName : '';
+      document.getElementById('fEmail').value = editing ? editing.Email : '';
+      document.getElementById('fPosition').value = editing ? editing.Position : '';
+      document.getElementById('fDeptSelect').value = editing ? editing.Department : (departments[0] ? departments[0].DepartmentName : '');
+      document.getElementById('fRole').value = editing ? editing.Role : 'Employee';
+      document.getElementById('fEmployeeId').value = editing ? editing.EmployeeID : '';
+      document.getElementById('empIdRow').style.display = editing ? 'none' : '';
+      document.getElementById('qrModalBackdrop').classList.remove('show');
+      document.getElementById('empModalBackdrop').classList.add('show');
+    }
+    function closeEmployeeModal() { document.getElementById('empModalBackdrop').classList.remove('show'); }
+
+    function saveEmployee(e) {
+      e.preventDefault();
+      var btn = document.getElementById('empSaveBtn');
+      btn.disabled = true;
+      var editingId = document.getElementById('editingId').value;
+      var data = {
+        FullName: document.getElementById('fFullName').value.trim(),
+        Email: document.getElementById('fEmail').value.trim(),
+        Position: document.getElementById('fPosition').value.trim(),
+        Department: document.getElementById('fDeptSelect').value,
+        Role: document.getElementById('fRole').value
+      };
+      var call;
+      if (editingId) {
+        call = api('updateEmployee', { employeeId: editingId, data: data });
+      } else {
+        data.EmployeeID = document.getElementById('fEmployeeId').value.trim();
+        call = api('createEmployee', { data: data });
+      }
+      call.then(function (res) {
+        toast(editingId ? 'Employee updated.' : 'Employee created.');
+        closeEmployeeModal();
+        loadEmployees();
+        if (res.tempPassword) {
+          document.getElementById('tempPwValue').textContent = res.tempPassword;
+          document.getElementById('pwModalBackdrop').classList.add('show');
+        }
+      }).catch(function (err) { toast(err.message, true); }).then(function () { btn.disabled = false; });
+    }
+
+    function toggleStatus(employeeId, action) {
+      api(action, { employeeId: employeeId }).then(function () {
+        toast('Status updated.');
+        loadEmployees();
+      }).catch(function (err) { toast(err.message, true); });
+    }
+
+    function doResetPassword(employeeId) {
+      if (!confirm('Generate a new temporary password for this employee?')) return;
+      api('resetPassword', { employeeId: employeeId }).then(function (res) {
+        document.getElementById('tempPwValue').textContent = res.tempPassword;
+        document.getElementById('pwModalBackdrop').classList.add('show');
+      }).catch(function (err) { toast(err.message, true); });
+    }
+    function closePwModal() { document.getElementById('pwModalBackdrop').classList.remove('show'); }
+
+    function openQrModal(employeeId) {
+      var emp = allEmployees.filter(function (e) { return e.EmployeeID === employeeId; })[0];
+      if (!emp) return;
+      currentQrEmployee = emp;
+      renderQrCard(emp);
+      document.getElementById('qrModalBackdrop').classList.add('show');
+    }
+    function closeQrModal() { document.getElementById('qrModalBackdrop').classList.remove('show'); }
+
+    function renderQrCard(emp) {
+      var url = buildScanUrl(webAppUrl, emp.QRToken);
+      QRCode.toDataURL(url, { width: 220, margin: 1, color: { dark: '#0d3b1f', light: '#ffffff' } }, function (err, dataUrl) {
+        var html = '<div class="org">LGU Time Tracker</div>' +
+          '<div class="name">' + escapeHtml(emp.FullName) + '</div>' +
+          '<div class="empid">' + escapeHtml(emp.EmployeeID) + ' &middot; ' + escapeHtml(emp.Department) + '</div>' +
+          '<div id="qrCanvasWrap"><img src="' + dataUrl + '" width="220" height="220"></div>' +
+          '<div class="text-muted" style="font-size:12px;">Scan to record attendance</div>';
+        document.getElementById('qrCardContent').innerHTML = html;
+        document.getElementById('qrCardContent').dataset.dataurl = dataUrl;
+      });
+    }
+
+    function regenerateCurrentQR() {
+      if (!currentQrEmployee) return;
+      if (!confirm('Regenerating invalidates the current QR badge. Continue?')) return;
+      api('generateQR', { employeeId: currentQrEmployee.EmployeeID }).then(function (res) {
+        currentQrEmployee.QRToken = res.qrToken;
+        allEmployees = allEmployees.map(function (e) { return e.EmployeeID === currentQrEmployee.EmployeeID ? currentQrEmployee : e; });
+        renderQrCard(currentQrEmployee);
+        toast('QR code regenerated.');
+      }).catch(function (err) { toast(err.message, true); });
+    }
+
+    function downloadCurrentQR() {
+      var dataUrl = document.getElementById('qrCardContent').dataset.dataurl;
+      if (dataUrl) downloadDataUrl(dataUrl, currentQrEmployee.EmployeeID + '-qr.png');
+    }
+    function printCurrentQR() {
+      var dataUrl = document.getElementById('qrCardContent').dataset.dataurl;
+      if (dataUrl) printQrCard(dataUrl, { fullName: currentQrEmployee.FullName, employeeId: currentQrEmployee.EmployeeID, department: currentQrEmployee.Department });
+    }
+  </script>
+</body>
+</html>

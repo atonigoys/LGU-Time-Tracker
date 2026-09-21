@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <?!= include('Partial_Styles'); ?>
+</head>
+<body>
+  <div class="app-shell">
+    <?!= include('Partial_Sidebar'); ?>
+    <main class="main-content">
+      <header class="topbar">
+        <h1>Dashboard</h1>
+        <div class="topbar-user">
+          <div>
+            <div class="js-user-name" style="font-weight:600;"></div>
+            <div class="js-user-role text-muted" style="font-size:11.5px;"></div>
+          </div>
+          <div class="avatar js-user-avatar"></div>
+        </div>
+      </header>
+
+      <div class="page-body">
+        <div class="stat-grid" id="statGrid">
+          <div class="stat-card"><div class="label">Total Employees</div><div class="value">–</div></div>
+          <div class="stat-card"><div class="label">Present Today</div><div class="value">–</div></div>
+          <div class="stat-card warn"><div class="label">Late Today</div><div class="value">–</div></div>
+          <div class="stat-card danger"><div class="label">Absent Today</div><div class="value">–</div></div>
+          <div class="stat-card gold"><div class="label">On Leave</div><div class="value">–</div></div>
+          <div class="stat-card"><div class="label">Currently Clocked In</div><div class="value">–</div></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title">
+            <span>Today's Attendance</span>
+            <button class="btn small secondary" onclick="loadStats()">Refresh</button>
+          </div>
+          <div class="filters-bar">
+            <input type="text" id="fSearch" placeholder="Search employee name or ID…" oninput="renderTable()">
+            <select id="fDept" onchange="renderTable()"><option value="">All Departments</option></select>
+            <select id="fStatus" onchange="renderTable()">
+              <option value="">All Statuses</option>
+              <option value="PRESENT">Present</option>
+              <option value="LATE">Late</option>
+            </select>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Employee</th><th>Department</th><th>Time In</th><th>Time Out</th><th>Status</th></tr></thead>
+              <tbody id="tblBody"><tr><td colspan="5" class="empty-state">Loading…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <?!= include('Partial_Scripts'); ?>
+  <script>
+    var todayRows = [];
+
+    document.addEventListener('DOMContentLoaded', function () {
+      var session = initShell('dashboard', ['Admin', 'HR']);
+      if (!session) return;
+      loadDepartments();
+      loadStats();
+    });
+
+    function loadDepartments() {
+      api('getDepartments', {}).then(function (res) {
+        var sel = document.getElementById('fDept');
+        res.departments.forEach(function (d) {
+          var opt = document.createElement('option');
+          opt.value = d.DepartmentName; opt.textContent = d.DepartmentName;
+          sel.appendChild(opt);
+        });
+      }).catch(function () {});
+    }
+
+    function loadStats() {
+      api('getTodayStats', {}).then(function (res) {
+        var s = res.stats;
+        var grid = document.getElementById('statGrid');
+        var cards = grid.querySelectorAll('.stat-card .value');
+        cards[0].textContent = s.totalEmployees;
+        cards[1].textContent = s.presentToday;
+        cards[2].textContent = s.lateToday;
+        cards[3].textContent = s.absentToday;
+        cards[4].textContent = s.onLeave;
+        cards[5].textContent = s.clockedIn;
+        todayRows = res.today;
+        renderTable();
+      }).catch(function (err) { toast(err.message, true); });
+    }
+
+    function renderTable() {
+      var q = document.getElementById('fSearch').value.toLowerCase();
+      var dept = document.getElementById('fDept').value;
+      var status = document.getElementById('fStatus').value;
+      var rows = todayRows.filter(function (r) {
+        if (dept && r.Department !== dept) return false;
+        if (status && r.Status !== status) return false;
+        if (q && r.FullName.toLowerCase().indexOf(q) === -1 && r.EmployeeID.toLowerCase().indexOf(q) === -1) return false;
+        return true;
+      });
+      var tbody = document.getElementById('tblBody');
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No attendance records match your filters.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = rows.map(function (r) {
+        return '<tr>' +
+          '<td><strong>' + escapeHtml(r.FullName) + '</strong><br><span class="text-muted" style="font-size:11.5px;">' + escapeHtml(r.EmployeeID) + '</span></td>' +
+          '<td>' + escapeHtml(r.Department) + '</td>' +
+          '<td>' + escapeHtml(r.TimeIn || '-') + '</td>' +
+          '<td>' + escapeHtml(r.TimeOut || '-') + '</td>' +
+          '<td>' + statusBadge(r.Status) + '</td>' +
+          '</tr>';
+      }).join('');
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <?!= include('Partial_Styles'); ?>
+</head>
+<body>
+  <div class="app-shell">
+    <?!= include('Partial_Sidebar'); ?>
+    <main class="main-content">
+      <header class="topbar">
+        <h1>Audit Logs</h1>
+        <div class="topbar-user">
+          <div><div class="js-user-name" style="font-weight:600;"></div><div class="js-user-role text-muted" style="font-size:11.5px;"></div></div>
+          <div class="avatar js-user-avatar"></div>
+        </div>
+      </header>
+
+      <div class="page-body">
+        <div class="panel">
+          <div class="flex-between" style="margin-bottom:10px;">
+            <div class="panel-title" style="margin:0;">Recent Administrative Activity</div>
+            <input type="text" id="fSearch" placeholder="Filter by user or action…" style="max-width:260px;" oninput="renderTable()">
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Timestamp</th><th>User</th><th>Action</th><th>Target</th><th>Details</th></tr></thead>
+              <tbody id="tblBody"><tr><td colspan="5" class="empty-state">Loading…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <?!= include('Partial_Scripts'); ?>
+  <script>
+    var allLogs = [];
+
+    document.addEventListener('DOMContentLoaded', function () {
+      var session = initShell('audit-logs', ['Admin']);
+      if (!session) return;
+      loadLogs();
+    });
+
+    function loadLogs() {
+      api('getAuditLogs', {}).then(function (res) {
+        allLogs = res.logs;
+        renderTable();
+      }).catch(function (err) { toast(err.message, true); });
+    }
+
+    function renderTable() {
+      var q = document.getElementById('fSearch').value.toLowerCase();
+      var rows = allLogs.filter(function (l) {
+        return !q || String(l.UserID).toLowerCase().indexOf(q) > -1 || String(l.Action).toLowerCase().indexOf(q) > -1;
+      });
+      var tbody = document.getElementById('tblBody');
+      if (!rows.length) { tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No matching log entries.</td></tr>'; return; }
+      tbody.innerHTML = rows.map(function (l) {
+        var details = [l.OldValue, l.NewValue].filter(Boolean).join(' &rarr; ');
+        return '<tr>' +
+          '<td>' + escapeHtml(formatTs(l.Timestamp)) + '</td>' +
+          '<td>' + escapeHtml(l.UserID) + '</td>' +
+          '<td>' + escapeHtml(l.Action) + '</td>' +
+          '<td>' + escapeHtml(l.Target) + '</td>' +
+          '<td style="max-width:320px;white-space:normal;font-size:11.5px;color:#666;">' + details + '</td>' +
+          '</tr>';
+      }).join('');
+    }
+
+    function formatTs(ts) {
+      try { return new Date(ts).toLocaleString('en-PH', { timeZone: 'Asia/Manila' }); } catch (e) { return ts; }
+    }
+  </script>
+</body>
+</html>
