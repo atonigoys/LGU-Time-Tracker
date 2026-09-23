@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
 import { AppShell } from "@/components/AppShell";
+import { drivePhotoUrl } from "@/components/Avatar";
 import { useRequireAuth } from "@/lib/session";
 import { useToast } from "@/lib/toast";
 import { call } from "@/lib/api";
@@ -38,7 +39,7 @@ export default function MyQrPage() {
           <div className="text-[12px] tracking-wide text-gray-500 uppercase">LGU Time Tracker</div>
           {employee?.PhotoURL && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={employee.PhotoURL} alt="" className="mx-auto my-2 h-16 w-16 rounded-full object-cover" />
+            <img src={drivePhotoUrl(employee.PhotoURL)} alt="" className="mx-auto my-2 h-16 w-16 rounded-full object-cover" />
           )}
           <div className="mt-2.5 text-[19px] font-bold text-green-800">{employee?.FullName ?? "…"}</div>
           <div className="mb-4 text-[13px] text-gray-500">

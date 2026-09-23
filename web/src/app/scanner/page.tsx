@@ -7,6 +7,8 @@ import { call } from "@/lib/api";
 import { cls } from "@/lib/ui";
 import type { ScanResult } from "@/lib/types";
 
+const REPEAT_SCAN_COOLDOWN_MS = 10000;
+
 function extractToken(text: string): string {
   const match = text.match(/[?&]token=([^&]+)/);
   return match ? decodeURIComponent(match[1]) : text;
@@ -19,6 +21,7 @@ export default function ScannerPage() {
   const scannerRef = useRef<{ stop: () => Promise<void>; clear: () => void } | null>(null);
   const startedRef = useRef(false);
   const busyRef = useRef(false);
+  const lastScanRef = useRef<{ token: string; at: number } | null>(null);
 
   const [manualToken, setManualToken] = useState("");
   const [result, setResult] = useState<{ ok: true; data: ScanResult } | { ok: false; message: string } | null>(null);
@@ -26,6 +29,12 @@ export default function ScannerPage() {
 
   async function handleToken(token: string) {
     if (busyRef.current || !token) return;
+    // With fast scanning, a badge still held in front of the camera after the
+    // result screen closes would be read again and record a TIME OUT right
+    // after the TIME IN. Ignore the same code for a short cooldown.
+    const last = lastScanRef.current;
+    if (last && last.token === token && Date.now() - last.at < REPEAT_SCAN_COOLDOWN_MS) return;
+    lastScanRef.current = { token, at: Date.now() };
     busyRef.current = true;
     try {
       const data = await call<ScanResult>("scanQR", {
@@ -47,14 +56,37 @@ export default function ScannerPage() {
     if (!session || !readerRef.current) return;
     let cancelled = false;
 
-    import("html5-qrcode").then(({ Html5Qrcode }) => {
+    import("html5-qrcode").then(({ Html5Qrcode, Html5QrcodeSupportedFormats }) => {
       if (cancelled || !readerRef.current) return;
-      const scanner = new Html5Qrcode(readerRef.current.id);
+      const scanner = new Html5Qrcode(readerRef.current.id, {
+        verbose: false,
+        // Only look for QR codes (the default tries every barcode format on
+        // every frame), and use the browser's native detector when available
+        // (Chrome/Android), which is much faster than the JS decoder.
+        formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+        useBarCodeDetectorIfSupported: true,
+      });
       scannerRef.current = scanner;
       scanner
         .start(
           { facingMode: "environment" },
-          { fps: 10, qrbox: { width: 240, height: 240 } },
+          {
+            fps: 25,
+            // Scan box scales with the view (~75% of the shorter side) so a
+            // badge is picked up from farther away than a fixed 240px box.
+            qrbox: (w: number, h: number) => {
+              const size = Math.max(160, Math.floor(Math.min(w, h) * 0.75));
+              return { width: size, height: size };
+            },
+            // Ask for a sharper feed so small or distant codes decode on the
+            // first frames. When videoConstraints is set, it replaces the
+            // first argument, so facingMode must be repeated here.
+            videoConstraints: {
+              facingMode: "environment",
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            },
+          },
           (decodedText: string) => handleToken(extractToken(decodedText)),
           () => {}
         )

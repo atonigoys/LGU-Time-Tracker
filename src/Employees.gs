@@ -189,6 +189,7 @@ function getActiveDepartments_() {
   return apiOk_({ departments: rows.map(function (d) { return { DepartmentID: d.DepartmentID, DepartmentName: d.DepartmentName }; }) });
 }
 
+var PROFILE_PHOTO_FOLDER_ID = '1YG4Rm7SlsB-hSDRyEvIUaHVwe1lxqDVt';
 var PROFILE_PHOTO_FOLDER_NAME = 'LGU Time Tracker - Profile Photos';
 var MAX_PHOTO_BASE64_CHARS = 3000000; // ~2.2MB raw, generous given client-side resizing
 
@@ -221,7 +222,9 @@ function uploadProfilePhoto_(token, base64Data, mimeType) {
   var folder = getOrCreatePhotoFolder_();
   var file = folder.createFile(blob);
   file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-  var photoUrl = 'https://drive.google.com/uc?export=view&id=' + file.getId();
+  // The old "uc?export=view" link no longer renders in <img> tags; the
+  // thumbnail endpoint does, as long as the file is shared by link.
+  var photoUrl = 'https://drive.google.com/thumbnail?id=' + file.getId() + '&sz=w400';
 
   deleteOldProfilePhoto_(emp.PhotoURL, folder);
 
@@ -231,6 +234,13 @@ function uploadProfilePhoto_(token, base64Data, mimeType) {
 }
 
 function getOrCreatePhotoFolder_() {
+  // Prefer the shared folder; fall back to finding/creating one by name if the
+  // script's account can't open it (e.g. it was never shared with that account).
+  try {
+    return DriveApp.getFolderById(PROFILE_PHOTO_FOLDER_ID);
+  } catch (e) {
+    // fall through
+  }
   var it = DriveApp.getFoldersByName(PROFILE_PHOTO_FOLDER_NAME);
   if (it.hasNext()) return it.next();
   return DriveApp.createFolder(PROFILE_PHOTO_FOLDER_NAME);
