@@ -28,14 +28,20 @@ export interface Employee {
   DateCreated: string;
 }
 
+export type AttendanceStatus = "PRESENT" | "LATE" | "ABSENT" | "INCOMPLETE" | "ON LEAVE" | "HOLIDAY";
+
 export interface AttendanceRecord {
   AttendanceID: string;
   EmployeeID: string;
   Date: string;
+  /** "hh:mm:ss a" in Asia/Manila, or "" */
   TimeIn: string;
   TimeOut: string;
-  Status: "PRESENT" | "LATE" | string;
-  LateMinutes: number;
+  /** "HH:mm" in Asia/Manila, or "" - for edit forms */
+  TimeIn24?: string;
+  TimeOut24?: string;
+  Status: AttendanceStatus | string;
+  LateMinutes: number | "";
   TotalHours: number | "";
   OvertimeHours: number | "";
   Device: string;
@@ -44,6 +50,28 @@ export interface AttendanceRecord {
   UpdatedAt: string;
   FullName?: string;
   Department?: string;
+  Position?: string;
+  Source?: string;
+  HolidayName?: string;
+  LeaveType?: string;
+  /** True for absent/leave/holiday days that have no stored record */
+  Derived?: boolean;
+}
+
+export interface AttendanceSchedule {
+  StartTime: string;
+  EndTime: string;
+  LunchStart: string;
+  LunchEnd: string;
+  GraceMinutes: number;
+}
+
+export interface AttendanceResponse {
+  attendance: AttendanceRecord[];
+  employeeCount: number;
+  schedule: AttendanceSchedule;
+  derivedSkipped: boolean;
+  today: string;
 }
 
 export interface Department {

@@ -15,7 +15,7 @@ import type { Employee } from "@/lib/types";
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024; // pre-resize guard, generous - the real cap is post-resize
 
 export default function ProfilePage() {
-  const session = useRequireAuth(["Employee"]);
+  const session = useRequireAuth();
   const { updateUser } = useSession();
   const toast = useToast();
   const [employee, setEmployee] = useState<Employee | null>(null);
@@ -144,7 +144,7 @@ export default function ProfilePage() {
         </p>
       </div>
 
-      <div className={cls.panel}>
+      <div id="password" className={`${cls.panel} scroll-mt-20`}>
         <div className={cls.panelTitle}>Change Password</div>
         <form onSubmit={handleSubmit} className="space-y-3.5">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

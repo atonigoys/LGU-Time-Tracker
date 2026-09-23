@@ -39,9 +39,11 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(function Select
         ref={ref}
         id={id}
         aria-label={aria["aria-label"]}
-        className={`flex items-center justify-between gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-left text-sm text-gray-900 outline-none transition-shadow focus:border-green-600 focus:ring-2 focus:ring-green-100 data-[placeholder]:text-gray-400 ${className}`}
+        className={`flex min-w-0 items-center justify-between gap-2 rounded-lg whitespace-nowrap border border-gray-300 bg-white px-3 py-2.5 text-left text-sm text-gray-900 outline-none transition-shadow focus:border-green-600 focus:ring-2 focus:ring-green-100 data-[placeholder]:text-gray-400 ${className}`}
       >
-        <RadixSelect.Value placeholder={placeholder} />
+        <span className="min-w-0 truncate">
+          <RadixSelect.Value placeholder={placeholder} />
+        </span>
         <RadixSelect.Icon>
           <ChevronDown size={15} className="shrink-0 text-gray-400" />
         </RadixSelect.Icon>

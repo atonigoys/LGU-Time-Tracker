@@ -24,7 +24,9 @@ export default function ScannerPage() {
   const lastScanRef = useRef<{ token: string; at: number } | null>(null);
 
   const [manualToken, setManualToken] = useState("");
-  const [result, setResult] = useState<{ ok: true; data: ScanResult } | { ok: false; message: string } | null>(null);
+  const [result, setResult] = useState<
+    { ok: true; data: ScanResult } | { ok: false; message: string } | { pending: true } | null
+  >(null);
   const [cameraError, setCameraError] = useState("");
 
   async function handleToken(token: string) {
@@ -36,6 +38,10 @@ export default function ScannerPage() {
     if (last && last.token === token && Date.now() - last.at < REPEAT_SCAN_COOLDOWN_MS) return;
     lastScanRef.current = { token, at: Date.now() };
     busyRef.current = true;
+    // The server round trip takes a few seconds; confirm the read right away
+    // so people don't keep waving the badge at the camera.
+    setResult({ pending: true });
+    navigator.vibrate?.(80);
     try {
       const data = await call<ScanResult>("scanQR", {
         qrToken: token,
@@ -158,7 +164,13 @@ export default function ScannerPage() {
       {result && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-green-950/96 p-6 text-center text-white">
           <div className="max-w-[420px]">
-            {result.ok ? (
+            {"pending" in result ? (
+              <>
+                <div className="mx-auto mb-4 h-14 w-14 animate-spin rounded-full border-4 border-white/30 border-t-white" />
+                <h2 className="text-2xl font-bold">QR Code Detected</h2>
+                <div className="opacity-85">Recording attendance…</div>
+              </>
+            ) : result.ok ? (
               <>
                 <div className="mb-1.5 text-[60px]">✓</div>
                 <h2 className="text-2xl font-bold">

@@ -108,6 +108,8 @@ function routeAction_(action, p, e) {
     case 'scanQR': return scanQR_(p.qrToken, p.device, ip);
     case 'manualTimeAction': return manualTimeAction_(p.token, p.device);
     case 'getAttendance': return getAttendance_(p.token, p.filters || {});
+    case 'updateAttendance': return updateAttendance_(p.token, p.data || {});
+    case 'deleteAttendance': return deleteAttendance_(p.token, p.attendanceId, p.reason);
     case 'getMyAttendance': return getMyAttendance_(p.token, p.dateFrom, p.dateTo);
     case 'getTodayStats': return getTodayStats_(p.token);
     case 'getMyTodayStatus': return getMyTodayStatus_(p.token);

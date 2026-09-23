@@ -8,12 +8,28 @@ function getSchedules_(token) {
   return apiOk_({ schedules: sheetToObjects_('Schedules') });
 }
 
+var DEFAULT_SCHEDULE_ = {
+  ScheduleID: 'DEFAULT', ScheduleName: 'Regular', StartTime: '08:00', EndTime: '17:00',
+  LunchStart: '12:00', LunchEnd: '13:00', GraceMinutes: 15, Status: 'Active'
+};
+
+/**
+ * The active schedule, with any unreadable field replaced by the default so
+ * attendance math never runs on a blank or malformed time.
+ */
 function getDefaultSchedule_() {
   var rows = sheetToObjects_('Schedules').filter(function (s) { return String(s.Status).toLowerCase() === 'active'; });
-  return rows[0] || {
-    ScheduleID: 'DEFAULT', ScheduleName: 'Regular', StartTime: '08:00', EndTime: '17:00',
-    LunchStart: '12:00', LunchEnd: '13:00', GraceMinutes: 15, Status: 'Active'
-  };
+  var s = Object.assign({}, rows[0] || DEFAULT_SCHEDULE_);
+  ['StartTime', 'EndTime'].forEach(function (f) {
+    if (!parseTimeOfDay_(s[f])) s[f] = DEFAULT_SCHEDULE_[f];
+  });
+  // Lunch is optional: blank means no lunch deduction, but a malformed value is dropped.
+  ['LunchStart', 'LunchEnd'].forEach(function (f) {
+    if (s[f] !== '' && !parseTimeOfDay_(s[f])) s[f] = '';
+  });
+  var grace = Number(s.GraceMinutes);
+  s.GraceMinutes = isFinite(grace) && grace >= 0 ? grace : 0;
+  return s;
 }
 
 function saveSchedule_(token, data) {

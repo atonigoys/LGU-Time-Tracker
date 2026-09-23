@@ -55,7 +55,12 @@ export default function EmployeesPage() {
   }, [toast]);
 
   useEffect(() => {
-    if (session) load();
+    if (!session) return;
+    // "View Employee" links from other pages pass ?q=<employee id>.
+    const q = new URLSearchParams(window.location.search).get("q");
+    load().then(() => {
+      if (q) setSearch(q);
+    });
   }, [session, load]);
 
   const filtered = useMemo(() => {

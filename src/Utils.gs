@@ -17,11 +17,17 @@ var SHEET_HEADERS = {
   Settings: ['Key', 'Value', 'Description']
 };
 
+var cachedDatabase_ = null;
+
 /**
  * Returns (and lazily creates) the backing Spreadsheet.
  * The Spreadsheet ID lives only in Script Properties - never sent to the client.
  */
 function getDatabase_() {
+  // Cache per execution: every getSheet_ call lands here, and a single scan
+  // touches several sheets. openById is slow, so reopening it each time added
+  // seconds to every request.
+  if (cachedDatabase_) return cachedDatabase_;
   var props = PropertiesService.getScriptProperties();
   var id = props.getProperty('SPREADSHEET_ID');
   var ss;
@@ -36,6 +42,7 @@ function getDatabase_() {
     ss = SpreadsheetApp.create('LGU Time Tracker Database');
     props.setProperty('SPREADSHEET_ID', ss.getId());
   }
+  cachedDatabase_ = ss;
   return ss;
 }
 
@@ -63,6 +70,21 @@ function getSheet_(name) {
  */
 var DATE_ONLY_FIELDS_ = { Date: true, StartDate: true, EndDate: true };
 
+/**
+ * Same problem for schedule times: "08:00" typed into a sheet becomes a
+ * time-of-day cell, which reads back as a Date on 1899-12-30. Normalize to
+ * "HH:mm" using the spreadsheet's own timezone (formatting a 1899 date in a
+ * different zone shifts it by historic LMT offsets).
+ */
+var TIME_ONLY_FIELDS_ = { StartTime: true, EndTime: true, LunchStart: true, LunchEnd: true };
+
+var cachedSpreadsheetTz_ = null;
+
+function spreadsheetTz_() {
+  if (!cachedSpreadsheetTz_) cachedSpreadsheetTz_ = getDatabase_().getSpreadsheetTimeZone() || TIMEZONE;
+  return cachedSpreadsheetTz_;
+}
+
 /** Reads an entire sheet into an array of plain objects keyed by header row. */
 function sheetToObjects_(name) {
   var sheet = getSheet_(name);
@@ -82,6 +104,8 @@ function sheetToObjects_(name) {
       var value = row[c];
       if (DATE_ONLY_FIELDS_[header] && value instanceof Date) {
         value = formatDatePH_(value, 'yyyy-MM-dd');
+      } else if (TIME_ONLY_FIELDS_[header] && value instanceof Date) {
+        value = Utilities.formatDate(value, spreadsheetTz_(), 'HH:mm');
       }
       obj[header] = value;
     }
@@ -131,13 +155,60 @@ function todayStrPH_() {
   return formatDatePH_(nowPH_(), 'yyyy-MM-dd');
 }
 
-/** Parses a "yyyy-MM-dd" or "HH:mm" style value stored in a sheet into a Date on todays PH date. */
-function combineDateAndTime_(dateStr, timeStr) {
-  var parts = String(timeStr).split(':');
-  var d = new Date(dateStr + 'T00:00:00');
-  var phDateStr = formatDatePH_(d, 'yyyy-MM-dd');
-  var full = phDateStr + 'T' + (parts[0].length < 2 ? '0' + parts[0] : parts[0]) + ':' + parts[1] + ':00';
-  return new Date(full);
+/**
+ * Parses a time-of-day value into { h, m }, or null if it can't be read.
+ * Accepts "HH:mm", "H:mm:ss", "8:00 AM", or a Date (a time cell that wasn't
+ * normalized by sheetToObjects_).
+ */
+function parseTimeOfDay_(value) {
+  if (value instanceof Date) {
+    if (isNaN(value.getTime())) return null;
+    value = Utilities.formatDate(value, spreadsheetTz_(), 'HH:mm');
+  }
+  var m = String(value || '').trim().match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*([AaPp][Mm])?$/);
+  if (!m) return null;
+  var h = Number(m[1]);
+  var min = Number(m[2]);
+  if (m[3]) {
+    var pm = m[3].toUpperCase() === 'PM';
+    if (h < 1 || h > 12) return null;
+    h = (h % 12) + (pm ? 12 : 0);
+  }
+  if (h > 23 || min > 59) return null;
+  return { h: h, m: min };
+}
+
+/** True for a real "yyyy-MM-dd" calendar date. */
+function isValidDateStr_(dateStr) {
+  var m = String(dateStr || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return false;
+  var d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return d.getFullYear() === Number(m[1]) && d.getMonth() === Number(m[2]) - 1 && d.getDate() === Number(m[3]);
+}
+
+/**
+ * Combines a "yyyy-MM-dd" date and a time-of-day into a Date in the script
+ * timezone (Asia/Manila, per appsscript.json). Returns null if either part
+ * is invalid - callers must handle that instead of doing math on NaN, which
+ * is what used to write #NUM! into the sheet.
+ */
+function combineDateAndTime_(dateStr, timeValue) {
+  if (!isValidDateStr_(dateStr)) return null;
+  var t = parseTimeOfDay_(timeValue);
+  if (!t) return null;
+  var p = String(dateStr).split('-');
+  return new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]), t.h, t.m, 0);
+}
+
+function isValidDate_(d) {
+  return d instanceof Date && !isNaN(d.getTime());
+}
+
+/** A finite number, or '' - never NaN/Infinity/"#NUM!". */
+function safeNumber_(v) {
+  if (v === '' || v === null || v === undefined) return '';
+  var n = Number(v);
+  return isFinite(n) ? n : '';
 }
 
 function minutesBetween_(a, b) {
