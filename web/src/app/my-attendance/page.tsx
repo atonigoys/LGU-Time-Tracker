@@ -7,17 +7,14 @@ import { useRequireAuth } from "@/lib/session";
 import { useToast } from "@/lib/toast";
 import { cachedCall } from "@/lib/cache";
 import { cls } from "@/lib/ui";
+import { myAttendanceDefaultRange } from "@/lib/prefetch";
 import type { AttendanceRecord } from "@/lib/types";
-
-function isoDaysAgo(days: number) {
-  return new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
-}
 
 export default function MyAttendancePage() {
   const session = useRequireAuth(["Employee"]);
   const toast = useToast();
-  const [dateFrom, setDateFrom] = useState(isoDaysAgo(60));
-  const [dateTo, setDateTo] = useState(isoDaysAgo(0));
+  const [dateFrom, setDateFrom] = useState(() => myAttendanceDefaultRange().dateFrom);
+  const [dateTo, setDateTo] = useState(() => myAttendanceDefaultRange().dateTo);
   const [rows, setRows] = useState<AttendanceRecord[]>([]);
 
   const load = useCallback(async () => {

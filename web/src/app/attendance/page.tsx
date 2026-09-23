@@ -42,8 +42,9 @@ import { useToast } from "@/lib/toast";
 import { useConfirm } from "@/lib/confirm";
 import { call } from "@/lib/api";
 import { cachedCall } from "@/lib/cache";
+import { attendanceDefaultFilters } from "@/lib/prefetch";
 import { cls } from "@/lib/ui";
-import { addDays, formatDate, formatHours, formatTime, manilaToday, toNumber, weekdayShort } from "@/lib/format";
+import { formatDate, formatHours, formatTime, manilaToday, toNumber, weekdayShort } from "@/lib/format";
 import type { AttendanceRecord, AttendanceResponse, AttendanceSchedule, Department } from "@/lib/types";
 
 const STATUS_OPTIONS = [
@@ -80,8 +81,7 @@ interface AppliedFilters {
 }
 
 function defaultFilters(): AppliedFilters {
-  const today = manilaToday();
-  return { dateFrom: addDays(today, -29), dateTo: today, department: "" };
+  return attendanceDefaultFilters();
 }
 
 function useDebounced<T>(value: T, ms: number): T {

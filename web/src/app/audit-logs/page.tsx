@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { useRequireAuth } from "@/lib/session";
 import { useToast } from "@/lib/toast";
-import { call } from "@/lib/api";
+import { cachedCall } from "@/lib/cache";
 import { cls } from "@/lib/ui";
 import type { AuditLog } from "@/lib/types";
 
@@ -16,8 +16,7 @@ export default function AuditLogsPage() {
 
   useEffect(() => {
     if (!session) return;
-    call<{ logs: AuditLog[] }>("getAuditLogs")
-      .then((res) => setLogs(res.logs))
+    cachedCall<{ logs: AuditLog[] }>("getAuditLogs", {}, (res) => setLogs(res.logs))
       .catch((err) => toast(err instanceof Error ? err.message : "Failed to load logs.", true));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);

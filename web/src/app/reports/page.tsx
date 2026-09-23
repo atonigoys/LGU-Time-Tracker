@@ -8,7 +8,9 @@ import { Select } from "@/components/Select";
 import { useRequireAuth } from "@/lib/session";
 import { useToast } from "@/lib/toast";
 import { call } from "@/lib/api";
+import { cachedCall } from "@/lib/cache";
 import { cls } from "@/lib/ui";
+import { reportsDefaultRange } from "@/lib/prefetch";
 import type { Department, Employee } from "@/lib/types";
 
 type ReportRow = Record<string, string | number | undefined>;
@@ -39,10 +41,6 @@ const COLUMN_LABELS: Record<string, string> = {
   OvertimeHours: "OT Hrs",
 };
 
-function isoDaysAgo(days: number) {
-  return new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
-}
-
 export default function ReportsPage() {
   const session = useRequireAuth(["Admin", "HR"]);
   const toast = useToast();
@@ -52,8 +50,8 @@ export default function ReportsPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [dept, setDept] = useState("");
   const [employeeId, setEmployeeId] = useState("");
-  const [dateFrom, setDateFrom] = useState(isoDaysAgo(30));
-  const [dateTo, setDateTo] = useState(isoDaysAgo(0));
+  const [dateFrom, setDateFrom] = useState(() => reportsDefaultRange().dateFrom);
+  const [dateTo, setDateTo] = useState(() => reportsDefaultRange().dateTo);
   const [rows, setRows] = useState<ReportRow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -62,8 +60,10 @@ export default function ReportsPage() {
   const runReport = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await call<{ rows: ReportRow[] }>("getReport", { type, filters });
-      setRows(res.rows);
+      await cachedCall<{ rows: ReportRow[] }>("getReport", { type, filters }, (res) => {
+        setRows(res.rows);
+        setLoading(false);
+      });
     } catch (err) {
       toast(err instanceof Error ? err.message : "Failed to load report.", true);
     } finally {
@@ -74,8 +74,8 @@ export default function ReportsPage() {
 
   useEffect(() => {
     if (!session) return;
-    call<{ departments: Department[] }>("getDepartments").then((r) => setDepartments(r.departments)).catch(() => {});
-    call<{ employees: Employee[] }>("getEmployees").then((r) => setEmployees(r.employees)).catch(() => {});
+    cachedCall<{ departments: Department[] }>("getDepartments", {}, (r) => setDepartments(r.departments)).catch(() => {});
+    cachedCall<{ employees: Employee[] }>("getEmployees", {}, (r) => setEmployees(r.employees)).catch(() => {});
     runReport();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);

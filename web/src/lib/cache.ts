@@ -97,6 +97,12 @@ export function useBackgroundRefreshing(): boolean {
   );
 }
 
+/** True if a response for this request is cached today or already being fetched. */
+export function hasCachedOrPending(action: string, payload: Record<string, unknown> = {}) {
+  const key = cacheKey(action, payload);
+  return inflight.has(key) || readEntry(key) !== undefined;
+}
+
 /** Stores a response obtained some other way (e.g. bundled with login). */
 export function seedCache(action: string, payload: Record<string, unknown>, data: unknown) {
   writeCache(cacheKey(action, payload), data);

@@ -11,6 +11,7 @@ import { useSession } from "@/lib/session";
 import { useNotifications } from "@/lib/notifications";
 import { LogoutDialog } from "@/components/LogoutDialog";
 import { useBackgroundRefreshing } from "@/lib/cache";
+import { warmPages } from "@/lib/prefetch";
 import { SIDEBAR_NAV, BOTTOM_NAV } from "@/lib/nav";
 import { Avatar } from "@/components/Avatar";
 import type { Role } from "@/lib/types";
@@ -48,6 +49,12 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
   const notifications = useNotifications(session?.user.role);
   const [logoutOpen, setLogoutOpen] = useState(false);
   const refreshing = useBackgroundRefreshing();
+
+  const role0 = session?.user.role;
+  const userId0 = session?.user.employeeId;
+  useEffect(() => {
+    if (role0 && userId0) warmPages(role0, userId0);
+  }, [role0, userId0]);
 
   useEffect(() => {
     // Read after mount so server and first client render match.
@@ -291,7 +298,17 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
           <div className="flex-1 px-4 pt-5 pb-24 md:px-6 md:pb-8">{children}</div>
         </main>
 
-        <LogoutDialog open={logoutOpen} onOpenChange={setLogoutOpen} onConfirm={logout} />
+        <LogoutDialog
+          open={logoutOpen}
+          onOpenChange={setLogoutOpen}
+          onConfirm={logout}
+          user={{
+            fullName: session.user.fullName,
+            roleLabel: ROLE_LABELS[role],
+            email: session.user.email,
+            photoUrl: session.user.photoUrl,
+          }}
+        />
 
         {/* Mobile bottom nav */}
         <nav

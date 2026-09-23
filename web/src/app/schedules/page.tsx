@@ -7,6 +7,7 @@ import { Select } from "@/components/Select";
 import { useRequireAuth } from "@/lib/session";
 import { useToast } from "@/lib/toast";
 import { call } from "@/lib/api";
+import { cachedCall } from "@/lib/cache";
 import { cls } from "@/lib/ui";
 import type { Schedule } from "@/lib/types";
 
@@ -30,8 +31,7 @@ export default function SchedulesPage() {
 
   const load = useCallback(async () => {
     try {
-      const res = await call<{ schedules: Schedule[] }>("getSchedules");
-      setSchedules(res.schedules);
+      await cachedCall<{ schedules: Schedule[] }>("getSchedules", {}, (res) => setSchedules(res.schedules));
     } catch (err) {
       toast(err instanceof Error ? err.message : "Failed to load schedules.", true);
     }

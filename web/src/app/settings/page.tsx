@@ -5,6 +5,7 @@ import { AppShell } from "@/components/AppShell";
 import { useRequireAuth } from "@/lib/session";
 import { useToast } from "@/lib/toast";
 import { call } from "@/lib/api";
+import { cachedCall } from "@/lib/cache";
 import { cls } from "@/lib/ui";
 
 export default function SettingsPage() {
@@ -16,9 +17,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (!session) return;
-    call<{ settings: Record<string, string> }>("getSettings")
-      .then((res) => setOrgName(res.settings.ORG_NAME ?? ""))
-      .catch(() => {});
+    cachedCall<{ settings: Record<string, string> }>("getSettings", {}, (res) => setOrgName(res.settings.ORG_NAME ?? "")).catch(() => {});
   }, [session]);
 
   async function saveOrg(ev: FormEvent) {

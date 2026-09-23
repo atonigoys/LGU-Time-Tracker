@@ -9,6 +9,7 @@ import { useRequireAuth } from "@/lib/session";
 import { useToast } from "@/lib/toast";
 import { useConfirm } from "@/lib/confirm";
 import { call } from "@/lib/api";
+import { cachedCall } from "@/lib/cache";
 import { cls } from "@/lib/ui";
 import type { Holiday } from "@/lib/types";
 
@@ -24,8 +25,10 @@ export default function HolidaysPage() {
 
   const load = useCallback(async () => {
     try {
-      const res = await call<{ holidays: Holiday[] }>("getHolidays");
-      setHolidays([...res.holidays].sort((a, b) => a.Date.localeCompare(b.Date)));
+      await cachedCall<{ holidays: Holiday[] }>("getHolidays", {}, (res) => {
+        setHolidays([...res.holidays].sort((a, b) => a.Date.localeCompare(b.Date)));
+        setLoading(false);
+      });
     } catch (err) {
       toast(err instanceof Error ? err.message : "Failed to load holidays.", true);
     } finally {
