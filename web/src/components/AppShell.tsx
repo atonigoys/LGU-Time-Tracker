@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { ReactNode, useEffect, useState } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import * as Tooltip from "@radix-ui/react-tooltip";
-import { ArrowLeftRight, Bell, ChevronDown, Loader2, LogOut, PanelLeftClose, PanelLeftOpen, Settings, UserCircle } from "lucide-react";
+import { ArrowLeftRight, Bell, CalendarDays, ChevronDown, IdCard, Loader2, LogOut, PanelLeftClose, PanelLeftOpen, Settings, UserCircle } from "lucide-react";
 import { useSession } from "@/lib/session";
 import { useNotifications } from "@/lib/notifications";
 import { LogoutDialog } from "@/components/LogoutDialog";
@@ -277,6 +277,20 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
                         <UserCircle size={16} className="text-gray-400" /> Profile
                       </Link>
                     </DropdownMenu.Item>
+                    {role === "Employee" && (
+                      <>
+                        <DropdownMenu.Item asChild className={menuItemCls}>
+                          <Link href="/my-attendance">
+                            <CalendarDays size={16} className="text-gray-400" /> My Attendance
+                          </Link>
+                        </DropdownMenu.Item>
+                        <DropdownMenu.Item asChild className={menuItemCls}>
+                          <Link href="/my-qr">
+                            <IdCard size={16} className="text-gray-400" /> My QR Code
+                          </Link>
+                        </DropdownMenu.Item>
+                      </>
+                    )}
                     <DropdownMenu.Item asChild className={menuItemCls}>
                       <Link href={accountSettingsHref}>
                         <Settings size={16} className="text-gray-400" /> Account Settings

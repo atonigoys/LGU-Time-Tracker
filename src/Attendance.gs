@@ -573,3 +573,132 @@ function getMyTodayStatus_(token) {
     serverTime: formatDatePH_(nowPH_(), 'hh:mm:ss a')
   });
 }
+
+/**
+ * Everything the employee dashboard shows, in one request (every Apps Script
+ * call costs seconds of overhead). Identity comes only from the session, so
+ * an employee can never load someone else's data.
+ */
+function getEmployeeDashboard_(token) {
+  var session = requireAuth_(token);
+  var emp = findRow_('Employees', 'EmployeeID', session.employeeId);
+  if (!emp) return apiError_('Employee not found.');
+
+  var ctx = buildAttendanceContext_();
+  var now = nowPH_();
+  var today = ctx.today;
+  var mine = sheetToObjects_('Attendance').filter(function (r) { return r.EmployeeID === emp.EmployeeID; });
+
+  var rawByDate = {};
+  mine.forEach(function (r) { rawByDate[String(r.Date)] = r; });
+  var views = mine.map(function (r) { return toAttendanceView_(r, emp, ctx); });
+  views.sort(function (a, b) { return String(b.Date).localeCompare(String(a.Date)); });
+  var viewByDate = {};
+  views.forEach(function (v) { viewByDate[String(v.Date)] = v; });
+
+  // Calendar for the current month, one entry per day.
+  var created = isValidDate_(emp.DateCreated) ? formatDatePH_(emp.DateCreated, 'yyyy-MM-dd') : '';
+  var month = today.slice(0, 7);
+  var days = [];
+  for (var d = combineDateAndTime_(month + '-01', '00:00'); d && formatDatePH_(d, 'yyyy-MM') === month; d.setDate(d.getDate() + 1)) {
+    var ds = formatDatePH_(d, 'yyyy-MM-dd');
+    var dow = d.getDay();
+    var v = viewByDate[ds];
+    var leave = findLeave_(ctx.leavesByEmp, emp.EmployeeID, ds);
+    var status;
+    if (ds > today) status = 'FUTURE';
+    else if (v) status = v.Status;
+    else if (created && ds < created) status = 'NONE';
+    else if (ctx.holidays[ds]) status = 'HOLIDAY';
+    else if (dow === 0 || dow === 6) status = 'REST';
+    else if (leave) status = 'ON LEAVE';
+    else if (ds === today) status = 'PENDING'; // not timed in yet - not absent until the day is over
+    else status = 'ABSENT';
+    days.push({
+      date: ds,
+      dow: dow,
+      status: status,
+      timeIn: v ? v.TimeIn : '',
+      timeOut: v ? v.TimeOut : '',
+      totalHours: v ? v.TotalHours : '',
+      lateMinutes: v ? v.LateMinutes : '',
+      holidayName: ctx.holidays[ds] || '',
+      leaveType: leave ? leave.LeaveType : ''
+    });
+  }
+
+  // Notifications derived from real records only.
+  var notifications = [];
+  var todayView = viewByDate[today] || null;
+  if (todayView && todayView.TimeIn) {
+    notifications.push({ id: 'in-' + today, tone: 'success', text: 'Your time in was recorded at ' + todayView.TimeIn.replace(/:\d\d (AM|PM)$/, ' $1') + '.' });
+    if (Number(todayView.LateMinutes) > 0 && todayView.Status !== 'HOLIDAY' && todayView.Status !== 'ON LEAVE') {
+      notifications.push({ id: 'late-' + today, tone: 'warning', text: 'You were marked late today (' + todayView.LateMinutes + ' min).' });
+    }
+    if (todayView.TimeOut) {
+      notifications.push({ id: 'out-' + today, tone: 'success', text: 'Your time out was recorded at ' + todayView.TimeOut.replace(/:\d\d (AM|PM)$/, ' $1') + '.' });
+    }
+  }
+  views.forEach(function (v) {
+    if (v.Status === 'INCOMPLETE' && v.Date >= addDaysStr_(today, -14)) {
+      notifications.push({ id: 'inc-' + v.Date, tone: 'warning', text: 'No time out was recorded on ' + formatDatePH_(combineDateAndTime_(v.Date, '00:00'), 'MMMM d, yyyy') + '. Contact HR to correct it.' });
+    }
+  });
+  sheetToObjects_('Leave')
+    .filter(function (l) { return l.EmployeeID === emp.EmployeeID && (l.Status === 'Approved' || l.Status === 'Rejected'); })
+    .sort(function (a, b) { return String(b.StartDate).localeCompare(String(a.StartDate)); })
+    .slice(0, 3)
+    .forEach(function (l) {
+      notifications.push({
+        id: 'leave-' + l.LeaveID,
+        tone: l.Status === 'Approved' ? 'success' : 'neutral',
+        text: 'Your ' + (l.LeaveType ? l.LeaveType + ' ' : '') + 'leave (' + shortDate_(l.StartDate) +
+          (l.EndDate && String(l.EndDate) !== String(l.StartDate) ? ' – ' + shortDate_(l.EndDate) : '') + ') was ' + String(l.Status).toLowerCase() + '.'
+      });
+    });
+
+  var settings = {};
+  sheetToObjects_('Settings').forEach(function (r) { settings[r.Key] = r.Value; });
+  var announcement = String(settings.ANNOUNCEMENT || '').trim();
+
+  var profile = sanitizeEmployee_(emp);
+  delete profile.QRToken;
+
+  var sch = ctx.schedule;
+  var rawToday = rawByDate[today];
+  return apiOk_({
+    employee: profile,
+    today: todayView,
+    todayDate: today,
+    todayTimeInMs: rawToday && isValidDate_(rawToday.TimeIn) ? rawToday.TimeIn.getTime() : null,
+    todayHoliday: ctx.holidays[today] || '',
+    todayLeave: (function () { var l = findLeave_(ctx.leavesByEmp, emp.EmployeeID, today); return l ? (l.LeaveType || 'Leave') : ''; })(),
+    serverNowMs: now.getTime(),
+    schedule: {
+      name: String(sch.ScheduleName || 'Regular'),
+      start: String(sch.StartTime),
+      end: String(sch.EndTime),
+      lunchStart: String(sch.LunchStart || ''),
+      lunchEnd: String(sch.LunchEnd || ''),
+      graceMinutes: sch.GraceMinutes,
+      workMinutes: scheduledWorkMinutes_(today, sch)
+    },
+    recent: views.slice(0, 5),
+    month: { key: month, days: days },
+    notifications: notifications,
+    announcement: announcement ? { text: announcement, updated: String(settings.ANNOUNCEMENT_UPDATED || '') } : null
+  });
+}
+
+/** "2026-09-23" -> "Sep 23, 2026" (falls back to the raw value). */
+function shortDate_(dateStr) {
+  var d = combineDateAndTime_(String(dateStr), '00:00');
+  return d ? formatDatePH_(d, 'MMM d, yyyy') : String(dateStr || '');
+}
+
+/** "yyyy-MM-dd" shifted by n days. */
+function addDaysStr_(dateStr, n) {
+  var d = combineDateAndTime_(dateStr, '00:00');
+  d.setDate(d.getDate() + n);
+  return formatDatePH_(d, 'yyyy-MM-dd');
+}

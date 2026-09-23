@@ -116,6 +116,7 @@ function routeAction_(action, p, e) {
     case 'getMyAttendance': return getMyAttendance_(p.token, p.dateFrom, p.dateTo);
     case 'getTodayStats': return getTodayStats_(p.token);
     case 'getMyTodayStatus': return getMyTodayStatus_(p.token);
+    case 'getEmployeeDashboard': return getEmployeeDashboard_(p.token);
 
     // --- Departments ---
     case 'getDepartments': return getDepartments_(p.token);

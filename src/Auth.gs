@@ -80,9 +80,9 @@ function buildHomeData_(token, role) {
     }
   }
   if (role === 'Employee') {
-    grab('getMyTodayStatus', function () { return getMyTodayStatus_(token); });
     grab('getMyAttendance', function () { return getMyAttendance_(token); });
     grab('getMyQR', function () { return getMyQR_(token); });
+    grab('getEmployeeDashboard', function () { return getEmployeeDashboard_(token); });
   } else {
     var today = todayStrPH_();
     var start = combineDateAndTime_(today, '00:00');
