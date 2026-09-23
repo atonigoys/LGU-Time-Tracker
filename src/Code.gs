@@ -82,6 +82,9 @@ function routeAction_(action, p, e) {
   p = p || {};
   var ip = getClientIp_(e);
   switch (action) {
+    // --- Warm-up (login page wakes the script while the user types; touches no sheets) ---
+    case 'ping': return apiOk_({});
+
     // --- Auth ---
     case 'login': return login_(p.email, p.password, ip);
     case 'logout': return logout_(p.token);

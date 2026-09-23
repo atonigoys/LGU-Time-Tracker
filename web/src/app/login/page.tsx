@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import { call } from "@/lib/api";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -56,10 +57,16 @@ export default function LoginPage() {
   const [demoOpen, setDemoOpen] = useState(false);
 
   useEffect(() => {
+    // Apps Script sleeps when idle and the first request can take 10s+.
+    // Wake it now so it's ready by the time the user submits the form.
+    call("ping").catch(() => {});
+  }, []);
+
+  useEffect(() => {
     if (loading || !session) return;
     // A brief "Login successful" beat only when we just submitted the form;
     // visiting /login while already authenticated redirects immediately.
-    const delay = success ? 650 : 0;
+    const delay = success ? 250 : 0;
     const t = setTimeout(() => router.replace(homeForRole(session.user.role)), delay);
     return () => clearTimeout(t);
   }, [loading, session, success, router]);

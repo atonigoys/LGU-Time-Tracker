@@ -9,6 +9,7 @@ import * as Tooltip from "@radix-ui/react-tooltip";
 import { Bell, ChevronDown, LogOut, PanelLeftClose, PanelLeftOpen, Settings, UserCircle } from "lucide-react";
 import { useSession } from "@/lib/session";
 import { useNotifications } from "@/lib/notifications";
+import { useConfirm } from "@/lib/confirm";
 import { SIDEBAR_NAV, BOTTOM_NAV } from "@/lib/nav";
 import { Avatar } from "@/components/Avatar";
 import type { Role } from "@/lib/types";
@@ -44,6 +45,16 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const notifications = useNotifications(session?.user.role);
+  const confirm = useConfirm();
+
+  async function confirmLogout() {
+    const ok = await confirm({
+      title: "Log out?",
+      message: "You'll need to sign in again to use LGU Time Tracker.",
+      confirmLabel: "Yes, log out",
+    });
+    if (ok) logout();
+  }
 
   useEffect(() => {
     // Read after mount so server and first client render match.
@@ -163,7 +174,7 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
               {!collapsed && "Collapse"}
             </button>
             <button
-              onClick={() => logout()}
+              onClick={confirmLogout}
               aria-label="Logout"
               title={collapsed ? "Logout" : undefined}
               className={`mt-0.5 flex w-full items-center gap-3 rounded-lg py-2 text-[13px] text-green-50/80 transition-colors hover:bg-red-500/15 hover:text-white focus-visible:ring-2 focus-visible:ring-amber-300 focus-visible:outline-none ${
@@ -263,7 +274,7 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
                     </DropdownMenu.Item>
                     <DropdownMenu.Separator className="my-1 h-px bg-gray-100" />
                     <DropdownMenu.Item
-                      onSelect={() => logout()}
+                      onSelect={confirmLogout}
                       className={`${menuItemCls} text-red-600 data-[highlighted]:bg-red-50 data-[highlighted]:text-red-700`}
                     >
                       <LogOut size={16} /> Logout

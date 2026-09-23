@@ -1,6 +1,6 @@
 import type { Session } from "./types";
 
-const SESSION_KEY = "lgu_session";
+export const SESSION_KEY = "lgu_session";
 
 export function getSession(): Session | null {
   if (typeof window === "undefined") return null;
