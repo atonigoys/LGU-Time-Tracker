@@ -26,19 +26,33 @@ export async function call<T = Record<string, unknown>>(
   const body: Record<string, unknown> = { action, ...payload };
   if (token && !body.token) body.token = token;
 
-  let res: Response;
-  try {
-    res = await fetch(APPS_SCRIPT_URL, {
+  const send = () =>
+    fetch(APPS_SCRIPT_URL, {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify(body),
     });
+
+  let res: Response;
+  try {
+    res = await send();
+    // Apps Script answers 404 for a moment while a new version is being
+    // deployed. The script never ran, so one retry can't duplicate anything.
+    if (res.status === 404) {
+      await new Promise((r) => setTimeout(r, 2000));
+      res = await send();
+    }
   } catch {
     throw new ApiError("Could not reach the server. Check your internet connection.");
   }
 
   if (!res.ok) {
-    throw new ApiError(`Server error (HTTP ${res.status}).`);
+    console.error(`Apps Script responded with HTTP ${res.status}`);
+    throw new ApiError(
+      res.status === 404
+        ? "The server is being updated. Please try again in a moment."
+        : "The server is temporarily unavailable. Please try again."
+    );
   }
 
   const json = (await res.json()) as ApiResponse<T>;
