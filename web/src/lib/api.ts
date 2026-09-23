@@ -1,9 +1,15 @@
 import { getToken, clearSession } from "./storage";
 import type { ApiResponse } from "./types";
+import { DATA_CHANGED_EVENT } from "./events";
 
 const APPS_SCRIPT_URL = process.env.NEXT_PUBLIC_APPS_SCRIPT_URL;
 
 class ApiError extends Error {}
+
+/** Actions that only read data. Anything else changes data on the server. */
+function isReadOnly(action: string) {
+  return action === "ping" || action.startsWith("get") || action.startsWith("export");
+}
 
 /**
  * Calls the deployed Apps Script Web App, which is the sole API surface in
@@ -65,6 +71,8 @@ export async function call<T = Record<string, unknown>>(
     }
     throw new ApiError(json.error);
   }
+
+  if (!isReadOnly(action) && typeof window !== "undefined") window.dispatchEvent(new Event(DATA_CHANGED_EVENT));
 
   const { success: _success, ...rest } = json;
   void _success;

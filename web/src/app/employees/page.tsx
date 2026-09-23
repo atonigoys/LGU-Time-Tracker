@@ -76,6 +76,11 @@ export default function EmployeesPage() {
     });
   }, [employees, search, deptFilter, statusFilter]);
 
+  // Show the new status right away; load() then confirms it from the server.
+  function setStatus(employeeId: string, status: Employee["Status"]) {
+    setEmployees((prev) => prev.map((x) => (x.EmployeeID === employeeId ? { ...x, Status: status } : x)));
+  }
+
   const pendingCount = useMemo(() => employees.filter((e) => e.Status === "Pending").length, [employees]);
 
   function openAdd() {
@@ -141,6 +146,7 @@ export default function EmployeesPage() {
     const action = deactivating ? "deactivateEmployee" : "activateEmployee";
     try {
       await call(action, { employeeId: e.EmployeeID });
+      setStatus(e.EmployeeID, deactivating ? "Inactive" : "Active");
       toast("Status updated.");
       load();
     } catch (err) {
@@ -157,6 +163,7 @@ export default function EmployeesPage() {
     if (!ok) return;
     try {
       await call("approveEmployee", { employeeId: e.EmployeeID });
+      setStatus(e.EmployeeID, "Active");
       toast("Account approved.");
       load();
     } catch (err) {
@@ -174,6 +181,7 @@ export default function EmployeesPage() {
     if (!ok) return;
     try {
       await call("rejectEmployee", { employeeId: e.EmployeeID });
+      setStatus(e.EmployeeID, "Inactive");
       toast("Account rejected.");
       load();
     } catch (err) {

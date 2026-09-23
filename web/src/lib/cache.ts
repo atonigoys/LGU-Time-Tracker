@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { call } from "./api";
+import { DATA_CHANGED_EVENT } from "./events";
 import { getSession } from "./storage";
 import { manilaToday } from "./format";
 
@@ -28,11 +29,11 @@ function cacheKey(action: string, payload: Record<string, unknown>) {
   return `${PREFIX}${manilaToday()}:${user}:${action}:${JSON.stringify(payload)}`;
 }
 
-function readEntry<T>(key: string): { at: number; data: T } | undefined {
+function readEntry<T>(key: string): { at: number; data: T; stale?: boolean } | undefined {
   try {
     const raw = window.localStorage.getItem(key);
     if (!raw) return undefined;
-    const entry = JSON.parse(raw) as { at: number; data: T };
+    const entry = JSON.parse(raw) as { at: number; data: T; stale?: boolean };
     if (Date.now() - entry.at > MAX_AGE_MS) return undefined;
     return entry;
   } catch {
@@ -79,6 +80,30 @@ export function clearReadCache() {
   inflight.clear();
 }
 
+/**
+ * After any change on the server, every cached response may be outdated.
+ * Keep the data (pages can still show it instantly) but mark it old so the
+ * next read always goes to the server, and drop in-flight reads that may
+ * have started before the change.
+ */
+function markAllStale() {
+  try {
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const k = window.localStorage.key(i);
+      if (!k?.startsWith(PREFIX)) continue;
+      const raw = window.localStorage.getItem(k);
+      if (!raw) continue;
+      const entry = JSON.parse(raw) as { at: number; data: unknown; stale?: boolean };
+      entry.stale = true;
+      window.localStorage.setItem(k, JSON.stringify(entry));
+    }
+  } catch {
+    // ignore
+  }
+  inflight.clear();
+}
+if (typeof window !== "undefined") window.addEventListener(DATA_CHANGED_EVENT, markAllStale);
+
 // --- "Updating…" indicator: counts background refreshes of data already on screen.
 let refreshing = 0;
 const listeners = new Set<() => void>();
@@ -111,7 +136,7 @@ export function seedCache(action: string, payload: Record<string, unknown>, data
 /** Starts a fetch unless a fresh copy is already cached or one is in flight. */
 export function prefetch(action: string, payload: Record<string, unknown> = {}) {
   const entry = readEntry(cacheKey(action, payload));
-  if (entry && Date.now() - entry.at < FRESH_MS) return;
+  if (entry && !entry.stale && Date.now() - entry.at < FRESH_MS) return;
   fetchAndCache(action, payload).catch(() => {});
 }
 
@@ -142,7 +167,7 @@ export function cachedCall<T>(
 ): Promise<T> {
   const entry = readEntry<T>(cacheKey(action, payload));
   const cached = entry?.data;
-  if (entry && Date.now() - entry.at < FRESH_MS) {
+  if (entry && !entry.stale && Date.now() - entry.at < FRESH_MS) {
     // Just fetched - use it without another round trip.
     return Promise.resolve().then(() => {
       onData(entry.data, false);
