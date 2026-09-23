@@ -115,11 +115,30 @@ function generateQR_(token, employeeId) {
   return apiOk_({ qrToken: newToken });
 }
 
+/**
+ * The caller's own QR/profile. Identity always comes from the session, never
+ * from a browser-supplied ID, so nobody can load another employee's QR.
+ */
 function getMyQR_(token) {
   var session = requireAuth_(token);
   var emp = findRow_('Employees', 'EmployeeID', session.employeeId);
   if (!emp) return apiError_('Employee not found.');
-  return apiOk_({ employee: sanitizeEmployee_(emp) });
+  return apiOk_({ employee: sanitizeEmployee_(emp), qrIssuedAt: qrIssuedAt_(emp) });
+}
+
+/**
+ * When the employee's current QR token was issued: the latest REGENERATE_QR
+ * audit entry, otherwise the account creation date. "yyyy-MM-dd" or ''.
+ */
+function qrIssuedAt_(emp) {
+  var latest = null;
+  sheetToObjects_('AuditLogs').forEach(function (l) {
+    if (l.Action !== 'REGENERATE_QR' || l.Target !== emp.EmployeeID) return;
+    var t = l.Timestamp instanceof Date ? l.Timestamp : new Date(l.Timestamp);
+    if (isValidDate_(t) && (!latest || t > latest)) latest = t;
+  });
+  var issued = latest || (isValidDate_(emp.DateCreated) ? emp.DateCreated : null);
+  return issued ? formatDatePH_(issued, 'yyyy-MM-dd') : '';
 }
 
 /**

@@ -7,6 +7,7 @@ import { AppShell } from "@/components/AppShell";
 import { StatusPill } from "@/components/Badge";
 import { SkeletonTableRows } from "@/components/Skeleton";
 import { Select } from "@/components/Select";
+import { drivePhotoUrl } from "@/components/Avatar";
 import { useRequireAuth } from "@/lib/session";
 import { useToast } from "@/lib/toast";
 import { useConfirm } from "@/lib/confirm";
@@ -473,6 +474,10 @@ export default function EmployeesPage() {
                     fullName: qrEmployee.FullName,
                     employeeId: qrEmployee.EmployeeID,
                     department: qrEmployee.Department,
+                    position: qrEmployee.Position,
+                    roleLabel: qrEmployee.Role === "HR" ? "HR Officer" : "Employee",
+                    photoUrl: drivePhotoUrl(qrEmployee.PhotoURL),
+                    status: qrEmployee.Status,
                   });
                   if (!ok) toast("Please allow pop-ups to print the QR code.", true);
                 }}
