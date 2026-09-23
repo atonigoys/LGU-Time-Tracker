@@ -33,7 +33,7 @@ export function myAttendanceDefaultRange() {
 function pageRequests(role: Role): Array<[string, Record<string, unknown>]> {
   if (role === "Employee") {
     return [
-      ["getEmployeeDashboard", {}],
+      ["getMyTodayStatus", {}],
       ["getMyAttendance", {}],
       ["getMyQR", {}],
       ["getMyAttendance", myAttendanceDefaultRange()],
@@ -94,7 +94,7 @@ export function prefetchHome(role: Role, home?: Record<string, unknown>) {
     if (!seeded(action, payload)) prefetch(action, payload);
   };
   if (role === "Employee") {
-    ensure("getEmployeeDashboard");
+    ensure("getMyTodayStatus");
     ensure("getMyAttendance");
     ensure("getMyQR");
   } else {
