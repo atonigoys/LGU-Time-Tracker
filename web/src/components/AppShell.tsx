@@ -6,10 +6,11 @@ import { usePathname } from "next/navigation";
 import { ReactNode, useEffect, useState } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import * as Tooltip from "@radix-ui/react-tooltip";
-import { Bell, ChevronDown, LogOut, PanelLeftClose, PanelLeftOpen, Settings, UserCircle } from "lucide-react";
+import { Bell, ChevronDown, Loader2, LogOut, PanelLeftClose, PanelLeftOpen, Settings, UserCircle } from "lucide-react";
 import { useSession } from "@/lib/session";
 import { useNotifications } from "@/lib/notifications";
-import { useConfirm } from "@/lib/confirm";
+import { LogoutDialog } from "@/components/LogoutDialog";
+import { useBackgroundRefreshing } from "@/lib/cache";
 import { SIDEBAR_NAV, BOTTOM_NAV } from "@/lib/nav";
 import { Avatar } from "@/components/Avatar";
 import type { Role } from "@/lib/types";
@@ -45,16 +46,8 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const notifications = useNotifications(session?.user.role);
-  const confirm = useConfirm();
-
-  async function confirmLogout() {
-    const ok = await confirm({
-      title: "Log out?",
-      message: "You'll need to sign in again to use LGU Time Tracker.",
-      confirmLabel: "Yes, log out",
-    });
-    if (ok) logout();
-  }
+  const [logoutOpen, setLogoutOpen] = useState(false);
+  const refreshing = useBackgroundRefreshing();
 
   useEffect(() => {
     // Read after mount so server and first client render match.
@@ -174,7 +167,7 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
               {!collapsed && "Collapse"}
             </button>
             <button
-              onClick={confirmLogout}
+              onClick={() => setLogoutOpen(true)}
               aria-label="Logout"
               title={collapsed ? "Logout" : undefined}
               className={`mt-0.5 flex w-full items-center gap-3 rounded-lg py-2 text-[13px] text-green-50/80 transition-colors hover:bg-red-500/15 hover:text-white focus-visible:ring-2 focus-visible:ring-amber-300 focus-visible:outline-none ${
@@ -205,6 +198,16 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
             <div className="flex min-w-0 items-center gap-2.5">
               <Image src="/logo.png" alt="" width={30} height={30} className="shrink-0 rounded-full md:hidden" />
               <h1 className="truncate text-[17px] font-bold tracking-tight text-green-900 md:text-lg">{title}</h1>
+              {refreshing && (
+                <span
+                  role="status"
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-gray-100 px-2.5 py-1 text-[11.5px] font-medium text-gray-500"
+                >
+                  <Loader2 size={12} className="animate-spin" aria-hidden />
+                  <span className="hidden sm:inline">Updating…</span>
+                  <span className="sr-only sm:hidden">Updating</span>
+                </span>
+              )}
             </div>
 
             <div className="flex items-center gap-1.5 sm:gap-2.5">
@@ -274,7 +277,7 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
                     </DropdownMenu.Item>
                     <DropdownMenu.Separator className="my-1 h-px bg-gray-100" />
                     <DropdownMenu.Item
-                      onSelect={confirmLogout}
+                      onSelect={() => setTimeout(() => setLogoutOpen(true), 0)}
                       className={`${menuItemCls} text-red-600 data-[highlighted]:bg-red-50 data-[highlighted]:text-red-700`}
                     >
                       <LogOut size={16} /> Logout
@@ -287,6 +290,8 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
 
           <div className="flex-1 px-4 pt-5 pb-24 md:px-6 md:pb-8">{children}</div>
         </main>
+
+        <LogoutDialog open={logoutOpen} onOpenChange={setLogoutOpen} onConfirm={logout} />
 
         {/* Mobile bottom nav */}
         <nav

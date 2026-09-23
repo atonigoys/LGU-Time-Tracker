@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useRef, useState, useCallback, Re
 import { useRouter } from "next/navigation";
 import { call } from "./api";
 import * as storage from "./storage";
+import { prefetchHome } from "./prefetch";
 import type { Role, Session, SessionUser } from "./types";
 
 interface SessionContextValue {
@@ -52,9 +53,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
-    const res = await call<{ token: string; user: SessionUser }>("login", { email, password });
+    const res = await call<{ token: string; user: SessionUser; home?: Record<string, unknown> }>("login", { email, password });
     const next: Session = { token: res.token, user: res.user };
     storage.setSession(next);
+    prefetchHome(res.user.role, res.home);
     setSessionState(next);
   }, []);
 

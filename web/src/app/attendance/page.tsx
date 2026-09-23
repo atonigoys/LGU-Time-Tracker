@@ -41,6 +41,7 @@ import { useRequireAuth } from "@/lib/session";
 import { useToast } from "@/lib/toast";
 import { useConfirm } from "@/lib/confirm";
 import { call } from "@/lib/api";
+import { cachedCall } from "@/lib/cache";
 import { cls } from "@/lib/ui";
 import { addDays, formatDate, formatHours, formatTime, manilaToday, toNumber, weekdayShort } from "@/lib/format";
 import type { AttendanceRecord, AttendanceResponse, AttendanceSchedule, Department } from "@/lib/types";
@@ -175,12 +176,15 @@ export default function AttendancePage() {
   // Only sets state after the request settles, so it's safe to start from an effect.
   const fetchAttendance = useCallback(async (filters: AppliedFilters) => {
     try {
-      const res = await call<AttendanceResponse>("getAttendance", { filters });
-      setRows(res.attendance);
-      setEmployeeCount(res.employeeCount ?? 0);
-      setSchedule(res.schedule ?? null);
-      setDerivedSkipped(!!res.derivedSkipped);
-      setLoadError(false);
+      await cachedCall<AttendanceResponse>("getAttendance", { filters }, (res) => {
+        setRows(res.attendance);
+        setEmployeeCount(res.employeeCount ?? 0);
+        setSchedule(res.schedule ?? null);
+        setDerivedSkipped(!!res.derivedSkipped);
+        setLoadError(false);
+        // Cached rows can be shown right away; skeletons are only for a cold load.
+        setLoading(false);
+      });
     } catch (err) {
       console.error("getAttendance failed", err);
       setLoadError(true);
@@ -202,12 +206,10 @@ export default function AttendancePage() {
     if (!session) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- state is only set after the request resolves
     fetchAttendance(applied);
-    call<{ departments: Department[] }>("getDepartments")
-      .then((res) => setDepartments(res.departments.filter((d) => d.Status !== "Inactive")))
-      .catch((err) => console.error("getDepartments failed", err));
-    call<{ settings: Record<string, string> }>("getSettings")
-      .then((res) => setOrgName(res.settings.ORG_NAME ?? ""))
-      .catch(() => {});
+    cachedCall<{ departments: Department[] }>("getDepartments", {}, (res) =>
+      setDepartments(res.departments.filter((d) => d.Status !== "Inactive"))
+    ).catch((err) => console.error("getDepartments failed", err));
+    cachedCall<{ settings: Record<string, string> }>("getSettings", {}, (res) => setOrgName(res.settings.ORG_NAME ?? "")).catch(() => {});
     // Initial load only; later loads come from Apply / Refresh.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);

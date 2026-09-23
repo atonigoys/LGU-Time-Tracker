@@ -6,7 +6,7 @@ import { AppShell } from "@/components/AppShell";
 import { drivePhotoUrl } from "@/components/Avatar";
 import { useRequireAuth } from "@/lib/session";
 import { useToast } from "@/lib/toast";
-import { call } from "@/lib/api";
+import { cachedCall } from "@/lib/cache";
 import { cls } from "@/lib/ui";
 import { buildScanUrl, downloadDataUrl, printQrCard } from "@/lib/qr";
 import type { Employee } from "@/lib/types";
@@ -19,14 +19,12 @@ export default function MyQrPage() {
 
   useEffect(() => {
     if (!session) return;
-    call<{ employee: Employee }>("getMyQR")
-      .then(async (res) => {
+    cachedCall<{ employee: Employee }>("getMyQR", {}, async (res) => {
         setEmployee(res.employee);
         const url = buildScanUrl(res.employee.QRToken);
         const dUrl = await QRCode.toDataURL(url, { width: 240, margin: 1, color: { dark: "#0d3b1f", light: "#ffffff" } });
         setDataUrl(dUrl);
-      })
-      .catch((err) => toast(err instanceof Error ? err.message : "Failed to load QR code.", true));
+      }).catch((err) => toast(err instanceof Error ? err.message : "Failed to load QR code.", true));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);
 

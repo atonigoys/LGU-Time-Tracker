@@ -6,7 +6,7 @@ import { AppShell } from "@/components/AppShell";
 import { StatusBadge } from "@/components/Badge";
 import { useRequireAuth } from "@/lib/session";
 import { useToast } from "@/lib/toast";
-import { call } from "@/lib/api";
+import { cachedCall } from "@/lib/cache";
 import { cls } from "@/lib/ui";
 import type { AttendanceRecord } from "@/lib/types";
 
@@ -25,21 +25,18 @@ export default function EmployeeDashboardPage() {
     if (!session) return;
     const firstName = session.user.fullName.split(" ")[0];
 
-    call<{ today: AttendanceRecord | null; serverDate: string; serverTime: string }>("getMyTodayStatus")
-      .then((res) => {
+    cachedCall<{ today: AttendanceRecord | null; serverDate: string; serverTime: string }>("getMyTodayStatus", {}, (res, fromCache) => {
         const serverNow = new Date(`${res.serverDate} ${res.serverTime}`);
-        setOffsetMs(serverNow.getTime() - Date.now());
+        // A cached server time is stale; only sync the clock from a fresh response.
+        if (!fromCache) setOffsetMs(serverNow.getTime() - Date.now());
         const hour = serverNow.getHours();
         const g = hour < 12 ? "Good Morning" : hour < 18 ? "Good Afternoon" : "Good Evening";
         setGreeting(`${g}, ${firstName}!`);
         setDateLine(res.serverDate);
         setToday(res.today);
-      })
-      .catch((err) => toast(err instanceof Error ? err.message : "Failed to load status.", true));
+      }).catch((err) => toast(err instanceof Error ? err.message : "Failed to load status.", true));
 
-    call<{ attendance: AttendanceRecord[] }>("getMyAttendance")
-      .then((res) => setHistory(res.attendance.slice(0, 7)))
-      .catch(() => {});
+    cachedCall<{ attendance: AttendanceRecord[] }>("getMyAttendance", {}, (res) => setHistory(res.attendance.slice(0, 7))).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);
 

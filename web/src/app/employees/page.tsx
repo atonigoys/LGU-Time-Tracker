@@ -11,6 +11,7 @@ import { useRequireAuth } from "@/lib/session";
 import { useToast } from "@/lib/toast";
 import { useConfirm } from "@/lib/confirm";
 import { call } from "@/lib/api";
+import { cachedCall } from "@/lib/cache";
 import { cls } from "@/lib/ui";
 import { buildScanUrl, downloadDataUrl, printQrCard } from "@/lib/qr";
 import type { Department, Employee, Role } from "@/lib/types";
@@ -41,12 +42,13 @@ export default function EmployeesPage() {
 
   const load = useCallback(async () => {
     try {
-      const [empRes, deptRes] = await Promise.all([
-        call<{ employees: Employee[] }>("getEmployees"),
-        call<{ departments: Department[] }>("getDepartments"),
+      await Promise.all([
+        cachedCall<{ employees: Employee[] }>("getEmployees", {}, (res) => {
+          setEmployees(res.employees);
+          setLoading(false);
+        }),
+        cachedCall<{ departments: Department[] }>("getDepartments", {}, (res) => setDepartments(res.departments)),
       ]);
-      setEmployees(empRes.employees);
-      setDepartments(deptRes.departments);
     } catch (err) {
       toast(err instanceof Error ? err.message : "Failed to load employees.", true);
     } finally {

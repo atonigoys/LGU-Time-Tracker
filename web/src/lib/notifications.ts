@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { call } from "./api";
+import { cachedCall } from "./cache";
 import type { Employee, Role } from "./types";
 
 export interface AppNotification {
@@ -16,9 +16,8 @@ export interface AppNotification {
 const CACHE_MS = 5 * 60 * 1000;
 let cache: { at: number; items: AppNotification[] } | null = null;
 
-async function fetchNotifications(): Promise<AppNotification[]> {
-  const res = await call<{ employees: Employee[] }>("getEmployees");
-  const pending = res.employees.filter((e) => e.Status === "Pending").length;
+function toNotifications(employees: Employee[]): AppNotification[] {
+  const pending = employees.filter((e) => e.Status === "Pending").length;
   if (!pending) return [];
   return [
     {
@@ -39,14 +38,14 @@ export function useNotifications(role: Role | undefined) {
     if (!canSee) return;
     if (cache && Date.now() - cache.at < CACHE_MS) return;
     let cancelled = false;
-    fetchNotifications()
-      .then((next) => {
-        cache = { at: Date.now(), items: next };
-        if (!cancelled) setItems(next);
-      })
-      .catch(() => {
-        // Notifications are non-essential; stay quiet if they can't load.
-      });
+    // Shares the Employees page's cached list and in-flight request.
+    cachedCall<{ employees: Employee[] }>("getEmployees", {}, (res) => {
+      const next = toNotifications(res.employees);
+      cache = { at: Date.now(), items: next };
+      if (!cancelled) setItems(next);
+    }).catch(() => {
+      // Notifications are non-essential; stay quiet if they can't load.
+    });
     return () => {
       cancelled = true;
     };

@@ -5,7 +5,7 @@ import { AppShell } from "@/components/AppShell";
 import { StatusBadge } from "@/components/Badge";
 import { useRequireAuth } from "@/lib/session";
 import { useToast } from "@/lib/toast";
-import { call } from "@/lib/api";
+import { cachedCall } from "@/lib/cache";
 import { cls } from "@/lib/ui";
 import type { AttendanceRecord } from "@/lib/types";
 
@@ -22,8 +22,7 @@ export default function MyAttendancePage() {
 
   const load = useCallback(async () => {
     try {
-      const res = await call<{ attendance: AttendanceRecord[] }>("getMyAttendance", { dateFrom, dateTo });
-      setRows(res.attendance);
+      await cachedCall<{ attendance: AttendanceRecord[] }>("getMyAttendance", { dateFrom, dateTo }, (res) => setRows(res.attendance));
     } catch (err) {
       toast(err instanceof Error ? err.message : "Failed to load attendance.", true);
     }

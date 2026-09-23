@@ -11,13 +11,11 @@ import { WeeklyAttendanceChart, type WeeklyPoint } from "@/components/charts/Wee
 import { DepartmentChart, type DepartmentPoint } from "@/components/charts/DepartmentChart";
 import { useRequireAuth } from "@/lib/session";
 import { useToast } from "@/lib/toast";
-import { call } from "@/lib/api";
+import { cachedCall } from "@/lib/cache";
+import { weeklyReportPayload } from "@/lib/prefetch";
+import { addDays } from "@/lib/format";
 import { cls } from "@/lib/ui";
 import type { AttendanceRecord, Department, TodayStats } from "@/lib/types";
-
-function isoDaysAgo(days: number) {
-  return new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
-}
 
 function dayLabel(dateStr: string) {
   return new Date(`${dateStr}T00:00:00`).toLocaleDateString("en-PH", { weekday: "short" });
@@ -39,45 +37,43 @@ export default function DashboardPage() {
 
   const loadStats = useCallback(async () => {
     try {
-      const res = await call<{ stats: TodayStats; today: AttendanceRecord[] }>("getTodayStats");
-      setStats(res.stats);
-      setToday(res.today);
+      await cachedCall<{ stats: TodayStats; today: AttendanceRecord[] }>("getTodayStats", {}, (res) => {
+        setStats(res.stats);
+        setToday(res.today);
+      });
     } catch (err) {
       toast(err instanceof Error ? err.message : "Failed to load stats.", true);
     }
   }, [toast]);
 
   const loadCharts = useCallback(async () => {
+    const payload = weeklyReportPayload();
     try {
-      const dateFrom = isoDaysAgo(6);
-      const dateTo = isoDaysAgo(0);
-      const res = await call<{ rows: Array<{ Date: string; Status: string; EmployeeID: string; Department: string }> }>(
+      await cachedCall<{ rows: Array<{ Date: string; Status: string; EmployeeID: string; Department: string }> }>(
         "getReport",
-        { type: "daily", filters: { dateFrom, dateTo } }
+        payload,
+        (res) => {
+          const byDate = new Map<string, { present: number; late: number }>();
+          for (let i = 0; i <= 6; i++) byDate.set(addDays(payload.filters.dateFrom, i), { present: 0, late: 0 });
+          res.rows.forEach((r) => {
+            const bucket = byDate.get(r.Date);
+            if (!bucket) return;
+            if (r.Status === "PRESENT") bucket.present += 1;
+            if (r.Status === "LATE") bucket.late += 1;
+          });
+          setWeekly(Array.from(byDate.entries()).map(([date, v]) => ({ day: dayLabel(date), ...v })));
+
+          const byDepartment = new Map<string, number>();
+          res.rows.forEach((r) => {
+            const d = r.Department || "Unassigned";
+            byDepartment.set(d, (byDepartment.get(d) ?? 0) + 1);
+          });
+          setByDept(Array.from(byDepartment.entries()).map(([department, count]) => ({ department, count })));
+        }
       );
-
-      const byDate = new Map<string, { present: number; late: number }>();
-      for (let i = 6; i >= 0; i--) {
-        const d = isoDaysAgo(i);
-        byDate.set(d, { present: 0, late: 0 });
-      }
-      res.rows.forEach((r) => {
-        const bucket = byDate.get(r.Date);
-        if (!bucket) return;
-        if (r.Status === "PRESENT") bucket.present += 1;
-        if (r.Status === "LATE") bucket.late += 1;
-      });
-      setWeekly(Array.from(byDate.entries()).map(([date, v]) => ({ day: dayLabel(date), ...v })));
-
-      const byDepartment = new Map<string, number>();
-      res.rows.forEach((r) => {
-        const d = r.Department || "Unassigned";
-        byDepartment.set(d, (byDepartment.get(d) ?? 0) + 1);
-      });
-      setByDept(Array.from(byDepartment.entries()).map(([department, count]) => ({ department, count })));
     } catch {
-      setWeekly([]);
-      setByDept([]);
+      setWeekly((w) => w ?? []);
+      setByDept((d) => d ?? []);
     }
   }, []);
 
@@ -85,9 +81,7 @@ export default function DashboardPage() {
     if (!session) return;
     loadStats();
     loadCharts();
-    call<{ departments: Department[] }>("getDepartments")
-      .then((res) => setDepartments(res.departments))
-      .catch(() => {});
+    cachedCall<{ departments: Department[] }>("getDepartments", {}, (res) => setDepartments(res.departments)).catch(() => {});
   }, [session, loadStats, loadCharts]);
 
   const filtered = useMemo(() => {

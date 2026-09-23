@@ -54,8 +54,47 @@ function login_(email, password, ip) {
       department: user.Department,
       position: user.Position,
       photoUrl: user.PhotoURL
-    }
+    },
+    home: buildHomeData_(token, user.Role)
   });
+}
+
+/**
+ * The data the user's home page loads first, returned with the login
+ * response. Every Apps Script request costs seconds of overhead, so this
+ * saves a whole round trip after signing in. Each piece is optional: a
+ * failure here must never fail the login itself.
+ */
+function buildHomeData_(token, role) {
+  var out = {};
+  function grab(name, fn) {
+    try {
+      var r = fn();
+      if (r && r.success) {
+        delete r.success;
+        out[name] = r;
+      }
+    } catch (e) {
+      // skip - the page will fetch it normally
+    }
+  }
+  if (role === 'Employee') {
+    grab('getMyTodayStatus', function () { return getMyTodayStatus_(token); });
+    grab('getMyAttendance', function () { return getMyAttendance_(token); });
+    grab('getMyQR', function () { return getMyQR_(token); });
+  } else {
+    var today = todayStrPH_();
+    var start = combineDateAndTime_(today, '00:00');
+    start.setDate(start.getDate() - 6);
+    var weekFrom = formatDatePH_(start, 'yyyy-MM-dd');
+    grab('getTodayStats', function () { return getTodayStats_(token); });
+    grab('getReport', function () { return getReport_(token, 'daily', { dateFrom: weekFrom, dateTo: today }); });
+    grab('getDepartments', function () { return getDepartments_(token); });
+    grab('getEmployees', function () { return getEmployees_(token); });
+    out.weekFrom = weekFrom;
+    out.weekTo = today;
+  }
+  return out;
 }
 
 function logout_(token) {

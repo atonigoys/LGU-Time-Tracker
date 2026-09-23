@@ -8,6 +8,7 @@ import { Avatar } from "@/components/Avatar";
 import { useRequireAuth, useSession } from "@/lib/session";
 import { useToast } from "@/lib/toast";
 import { call } from "@/lib/api";
+import { cachedCall } from "@/lib/cache";
 import { cls } from "@/lib/ui";
 import { resizeImageFile } from "@/lib/image";
 import type { Employee } from "@/lib/types";
@@ -26,8 +27,7 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (!session) return;
-    call<{ employee: Employee }>("getMyQR")
-      .then((res) => setEmployee(res.employee))
+    cachedCall<{ employee: Employee }>("getMyQR", {}, (res) => setEmployee(res.employee))
       .catch((err) => toast(err instanceof Error ? err.message : "Failed to load profile.", true));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);
