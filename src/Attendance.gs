@@ -9,11 +9,27 @@
  * this scan is a Time In or Time Out, applies schedule rules, and writes the
  * Attendance record. Returns a payload the confirmation screen can render directly.
  */
+/**
+ * Administrator accounts run the system and don't clock in, so they're left
+ * out of scanning, attendance lists, absences and dashboard counts.
+ */
+function isAdminAccount_(emp) {
+  return !!emp && emp.Role === 'Admin';
+}
+
+/** Active accounts whose attendance is tracked (everyone except Admins). */
+function tracksAttendance_(emp) {
+  return !!emp && String(emp.Status).toLowerCase() === 'active' && !isAdminAccount_(emp);
+}
+
+var ADMIN_NO_ATTENDANCE_MSG_ = 'Administrator accounts do not record attendance.';
+
 function scanQR_(qrToken, device, ip) {
   if (!qrToken) return apiError_('No QR token was provided.');
   var emp = findRow_('Employees', 'QRToken', qrToken);
   if (!emp) return apiError_('QR code not recognized. Please contact HR.');
   if (String(emp.Status).toLowerCase() !== 'active') return apiError_('This employee account is inactive.');
+  if (isAdminAccount_(emp)) return apiError_(ADMIN_NO_ATTENDANCE_MSG_);
 
   return recordAttendance_(emp, device, ip);
 }
@@ -23,6 +39,7 @@ function manualTimeAction_(token, device) {
   var session = requireAuth_(token);
   var emp = findRow_('Employees', 'EmployeeID', session.employeeId);
   if (!emp) return apiError_('Employee not found.');
+  if (isAdminAccount_(emp)) return apiError_(ADMIN_NO_ATTENDANCE_MSG_);
   return recordAttendance_(emp, device || 'Web', '');
 }
 
@@ -314,6 +331,7 @@ function getAttendance_(token, filters) {
     if (dateFrom && d < dateFrom) return false;
     if (dateTo && d > dateTo) return false;
     if (filters.employeeId && r.EmployeeID !== filters.employeeId) return false;
+    if (isAdminAccount_(empById[r.EmployeeID])) return false;
     return inDept(r.EmployeeID);
   });
 
@@ -324,7 +342,7 @@ function getAttendance_(token, filters) {
   });
 
   var activeEmployees = employees.filter(function (e) {
-    return String(e.Status).toLowerCase() === 'active' && inDept(e.EmployeeID) &&
+    return tracksAttendance_(e) && inDept(e.EmployeeID) &&
       (!filters.employeeId || e.EmployeeID === filters.employeeId);
   });
 
@@ -408,6 +426,7 @@ function updateAttendance_(token, data) {
     var dateStr = existing ? String(existing.Date) : String(data.Date || '');
     var emp = findRow_('Employees', 'EmployeeID', employeeId);
     if (!emp) return apiError_('Invalid employee ID. The employee could not be found.');
+    if (isAdminAccount_(emp)) return apiError_(ADMIN_NO_ATTENDANCE_MSG_);
     if (!isValidDateStr_(dateStr)) return apiError_('Invalid date.');
     if (dateStr > todayStrPH_()) return apiError_('Attendance cannot be recorded for a future date.');
 
@@ -504,13 +523,17 @@ function getMyAttendance_(token, dateFrom, dateTo) {
 function getTodayStats_(token) {
   requireAuth_(token, ['Admin', 'HR']);
   var dateStr = todayStrPH_();
-  var employees = sheetToObjects_('Employees').filter(function (e) { return String(e.Status).toLowerCase() === 'active'; });
-  var attendanceToday = sheetToObjects_('Attendance').filter(function (r) { return String(r.Date) === dateStr; });
+  var employees = sheetToObjects_('Employees').filter(tracksAttendance_);
+  var trackedIds = {};
+  employees.forEach(function (e) { trackedIds[e.EmployeeID] = true; });
+  var attendanceToday = sheetToObjects_('Attendance').filter(function (r) {
+    return String(r.Date) === dateStr && trackedIds[r.EmployeeID];
+  });
 
   var attById = {};
   attendanceToday.forEach(function (r) { attById[r.EmployeeID] = r; });
 
-  var present = 0, late = 0, clockedIn = 0, onLeave = 0;
+  var present = 0, late = 0, clockedIn = 0, onLeave = 0, absent = 0;
   employees.forEach(function (e) {
     var rec = attById[e.EmployeeID];
     if (rec) {
@@ -519,9 +542,10 @@ function getTodayStats_(token) {
       if (rec.TimeIn && !rec.TimeOut) clockedIn++;
     } else if (isOnLeave_(e.EmployeeID, dateStr)) {
       onLeave++;
+    } else {
+      absent++;
     }
   });
-  var absent = Math.max(0, employees.length - attendanceToday.length - onLeave);
 
   return apiOk_({
     stats: {

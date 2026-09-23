@@ -14,7 +14,6 @@ import {
   ShieldCheck,
   AlertCircle,
   CheckCircle2,
-  ChevronDown,
   QrCode,
   Clock,
   Building2,
@@ -54,7 +53,6 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
   const [success, setSuccess] = useState(false);
   const [showForgotInfo, setShowForgotInfo] = useState(false);
-  const [demoOpen, setDemoOpen] = useState(false);
 
   useEffect(() => {
     // Apps Script sleeps when idle and the first request can take 10s+.
@@ -312,36 +310,6 @@ export default function LoginPage() {
                 Create an account
               </Link>
             </p>
-
-            <div className="mt-6 rounded-lg border" style={{ borderColor: BRAND.border }}>
-              <button
-                type="button"
-                onClick={() => setDemoOpen((v) => !v)}
-                className="flex w-full items-center justify-between px-3.5 py-2.5 text-[13px] font-semibold"
-                style={{ color: BRAND.text }}
-                aria-expanded={demoOpen}
-              >
-                Demo Accounts
-                <ChevronDown size={15} className={`transition-transform duration-200 ${demoOpen ? "rotate-180" : ""}`} />
-              </button>
-              {demoOpen && (
-                <div className="border-t px-3.5 py-3 text-[12.5px] leading-relaxed" style={{ borderColor: BRAND.border, color: BRAND.muted }}>
-                  <div className="mb-2">
-                    <div className="font-semibold" style={{ color: BRAND.text }}>
-                      Admin
-                    </div>
-                    admin@lgu.local · Admin@123
-                  </div>
-                  <div>
-                    <div className="font-semibold" style={{ color: BRAND.text }}>
-                      Employee
-                    </div>
-                    employee@lgu.local · Employee@123
-                  </div>
-                  <div className="mt-2.5 text-[11.5px] italic">Demo credentials — change before production.</div>
-                </div>
-              )}
-            </div>
 
             <div className="mt-6 flex items-center justify-center gap-1.5 text-[11.5px]" style={{ color: BRAND.muted }}>
               <ShieldCheck size={13} />

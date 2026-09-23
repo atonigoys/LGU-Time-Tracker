@@ -1,7 +1,9 @@
 /**
  * Setup.gs
  * Run setupDatabase() once (Apps Script editor: select function, click Run)
- * to create the spreadsheet, all sheets with headers, and demo data.
+ * to create the spreadsheet, all sheets with headers, and default data
+ * (departments, schedule, holidays, settings). Then run createAdminAccount()
+ * once to create the first administrator. No demo accounts are created.
  */
 
 function setupDatabase() {
@@ -25,7 +27,6 @@ function setupDatabase() {
   seedSchedules_();
   seedHolidays_();
   seedSettings_();
-  seedDemoAccounts_();
 
   Logger.log('Setup complete. Spreadsheet URL: ' + ss.getUrl());
   return { spreadsheetUrl: ss.getUrl() };
@@ -80,42 +81,125 @@ function seedSettings_() {
   appendRow_('Settings', { Key: 'SESSION_HOURS', Value: '6', Description: 'How long a login session stays valid.' });
 }
 
-function seedDemoAccounts_() {
-  var employeesSheet = getSheet_('Employees');
-  if (employeesSheet.getLastRow() > 1) return;
+// --- First administrator -------------------------------------------------
+// Fill these in, then run createAdminAccount() once from the editor. The
+// temporary password is printed in the execution log; the admin should
+// change it right after signing in (Settings -> Change My Password).
+var FIRST_ADMIN_NAME = '';
+var FIRST_ADMIN_EMAIL = '';
+var FIRST_ADMIN_DEPARTMENT = 'HR Office';
 
+function createAdminAccount() {
+  var name = String(FIRST_ADMIN_NAME).trim();
+  var email = String(FIRST_ADMIN_EMAIL).toLowerCase().trim();
+  if (!name || !/^\S+@\S+\.\S+$/.test(email)) {
+    throw new Error('Set FIRST_ADMIN_NAME and FIRST_ADMIN_EMAIL at the top of this section first.');
+  }
+  if (findRow_('Employees', 'Email', email)) throw new Error('An account with ' + email + ' already exists.');
+
+  var tempPassword = generateTempPassword_();
+  var employeeId = generateId_('LGU');
   appendRow_('Employees', {
-    EmployeeID: 'LGU-ADMIN',
-    FullName: 'Maria Santos',
-    Email: 'admin@lgu.local',
-    PasswordHash: hashPassword_('Admin@123'),
+    EmployeeID: employeeId,
+    FullName: name,
+    Email: email,
+    PasswordHash: hashPassword_(tempPassword),
     Position: 'System Administrator',
-    Department: 'HR Office',
+    Department: FIRST_ADMIN_DEPARTMENT,
     Role: 'Admin',
     Status: 'Active',
     QRToken: generateSecureToken_(),
     PhotoURL: '',
     DateCreated: nowPH_()
   });
+  logAudit_('SYSTEM', 'CREATE_EMPLOYEE', employeeId, '', { FullName: name, Email: email, Role: 'Admin' });
+  Logger.log('Administrator created: ' + email);
+  Logger.log('Temporary password: ' + tempPassword + '   (change it after first sign-in)');
+}
 
-  appendRow_('Employees', {
-    EmployeeID: 'LGU-001',
-    FullName: 'Juan Dela Cruz',
-    Email: 'employee@lgu.local',
-    PasswordHash: hashPassword_('Employee@123'),
-    Position: 'Administrative Officer',
-    Department: 'HR Office',
-    Role: 'Employee',
-    Status: 'Active',
-    QRToken: generateSecureToken_(),
-    PhotoURL: '',
-    DateCreated: nowPH_()
+// --- Start over with no accounts -----------------------------------------
+/**
+ * Deletes EVERY account (all rows in Employees) plus all Attendance and
+ * Leave records, signs everyone out, then creates a fresh administrator from
+ * FIRST_ADMIN_NAME / FIRST_ADMIN_EMAIL above. Departments, schedules,
+ * holidays, settings and the audit log are kept.
+ *
+ * Requires the FIRST_ADMIN_* values so the system is never left without an
+ * admin. This cannot be undone (except from the spreadsheet's version history).
+ */
+function resetAllAccounts() {
+  var name = String(FIRST_ADMIN_NAME).trim();
+  var email = String(FIRST_ADMIN_EMAIL).toLowerCase().trim();
+  if (!name || !/^\S+@\S+\.\S+$/.test(email)) {
+    throw new Error('Set FIRST_ADMIN_NAME and FIRST_ADMIN_EMAIL (the new admin account) first, then run this again.');
+  }
+
+  var counts = {};
+  ['Employees', 'Attendance', 'Leave'].forEach(function (sheetName) {
+    var sheet = getSheet_(sheetName);
+    var dataRows = sheet.getLastRow() - 1;
+    counts[sheetName] = Math.max(0, dataRows);
+    if (dataRows > 0) {
+      sheet.getRange(2, 1, dataRows, sheet.getLastColumn()).clearContent();
+      try {
+        sheet.deleteRows(2, dataRows);
+      } catch (e) {
+        // Sheets won't delete every non-frozen row; cleared rows are ignored anyway.
+      }
+    }
   });
 
-  Logger.log('Demo accounts created:');
-  Logger.log('  Admin:    admin@lgu.local / Admin@123');
-  Logger.log('  Employee: employee@lgu.local / Employee@123');
-  Logger.log('CHANGE THESE PASSWORDS BEFORE GOING LIVE.');
+  signOutEveryone_();
+  logAudit_('SYSTEM', 'RESET_ALL_ACCOUNTS', '', '', counts);
+  Logger.log('Deleted ' + counts.Employees + ' account(s), ' + counts.Attendance +
+    ' attendance row(s), ' + counts.Leave + ' leave row(s). Everyone has been signed out.');
+
+  createAdminAccount();
+}
+
+// --- Remove the old demo accounts ----------------------------------------
+var DEMO_ACCOUNT_EMAILS_ = ['admin@lgu.local', 'employee@lgu.local'];
+
+/**
+ * One-time cleanup for installs created before demo accounts were removed.
+ * Deletes the demo accounts (admin@lgu.local, employee@lgu.local) and any
+ * attendance/leave rows they have. Refuses to run unless another active
+ * Admin exists, so you can't lock yourself out.
+ */
+function removeDemoAccounts() {
+  var employees = sheetToObjects_('Employees');
+  var demo = employees.filter(function (e) {
+    return DEMO_ACCOUNT_EMAILS_.indexOf(String(e.Email).toLowerCase().trim()) > -1;
+  });
+  if (!demo.length) {
+    Logger.log('No demo accounts found - nothing to remove.');
+    return;
+  }
+  var demoIds = demo.map(function (e) { return e.EmployeeID; });
+  var otherAdmins = employees.filter(function (e) {
+    return e.Role === 'Admin' && String(e.Status).toLowerCase() === 'active' && demoIds.indexOf(e.EmployeeID) === -1;
+  });
+  if (!otherAdmins.length) {
+    throw new Error('No other active Admin account exists. Make a real person an Admin first ' +
+      '(Employees -> Edit -> Role: Admin, or run createAdminAccount()), then run this again.');
+  }
+
+  // Delete from the bottom up so earlier row numbers stay valid.
+  function deleteRowsWhere(sheetName, test) {
+    var rows = sheetToObjects_(sheetName).filter(test).map(function (r) { return r._row; });
+    rows.sort(function (a, b) { return b - a; });
+    var sheet = getSheet_(sheetName);
+    rows.forEach(function (row) { sheet.deleteRow(row); });
+    return rows.length;
+  }
+  var isDemo = function (r) { return demoIds.indexOf(r.EmployeeID) > -1; };
+  var att = deleteRowsWhere('Attendance', isDemo);
+  var lv = deleteRowsWhere('Leave', isDemo);
+  var emp = deleteRowsWhere('Employees', isDemo);
+
+  logAudit_('SYSTEM', 'REMOVE_DEMO_ACCOUNTS', demoIds.join(', '), '', { employees: emp, attendance: att, leave: lv });
+  Logger.log('Removed ' + emp + ' demo account(s), ' + att + ' attendance row(s), ' + lv + ' leave row(s).');
+  Logger.log('Remaining active admins: ' + otherAdmins.map(function (a) { return a.Email; }).join(', '));
 }
 
 /** Utility to wipe and recreate everything from scratch during development. Not called automatically. */

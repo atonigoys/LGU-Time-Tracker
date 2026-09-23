@@ -335,9 +335,12 @@ export default function EmployeesPage() {
                           <button onClick={() => openEdit(e)} className={`${cls.btnSecondary} ${cls.btnSmall}`}>
                             Edit
                           </button>
-                          <button onClick={() => openQr(e)} className={`${cls.btnSecondary} ${cls.btnSmall}`}>
-                            QR
-                          </button>
+                          {/* Admins don't record attendance, so they have no badge to print. */}
+                          {e.Role !== "Admin" && (
+                            <button onClick={() => openQr(e)} className={`${cls.btnSecondary} ${cls.btnSmall}`}>
+                              QR
+                            </button>
+                          )}
                           <button onClick={() => resetPassword(e)} className={`${cls.btnSecondary} ${cls.btnSmall}`}>
                             Reset PW
                           </button>

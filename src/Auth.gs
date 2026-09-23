@@ -39,7 +39,8 @@ function login_(email, password, ip) {
     email: user.Email,
     role: user.Role,
     department: user.Department,
-    issuedAt: new Date().toISOString()
+    issuedAt: new Date().toISOString(),
+    epoch: currentSessionEpoch_()
   };
   cache.put('session:' + token, JSON.stringify(session), SESSION_TTL_SECONDS);
   logAudit_(user.EmployeeID, 'LOGIN', user.EmployeeID, '', '', ip);
@@ -102,13 +103,28 @@ function logout_(token) {
   return apiOk_({});
 }
 
+/**
+ * Sessions live in CacheService and can't be listed, so they can't be
+ * deleted one by one. Instead every session records the epoch it was issued
+ * under; bumping the epoch (resetAllAccounts) invalidates all of them at once.
+ */
+function currentSessionEpoch_() {
+  return PropertiesService.getScriptProperties().getProperty('SESSION_EPOCH') || '0';
+}
+
+function signOutEveryone_() {
+  PropertiesService.getScriptProperties().setProperty('SESSION_EPOCH', String(new Date().getTime()));
+}
+
 /** Returns the session object for a token, or null if missing/expired. */
 function getSession_(token) {
   if (!token) return null;
   var raw = CacheService.getScriptCache().get('session:' + token);
   if (!raw) return null;
   try {
-    return JSON.parse(raw);
+    var session = JSON.parse(raw);
+    if (String(session.epoch || '0') !== currentSessionEpoch_()) return null;
+    return session;
   } catch (e) {
     return null;
   }

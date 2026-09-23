@@ -39,7 +39,7 @@ copied directly into one Apps Script project:
 | `Reports.gs` | Daily/Monthly/Employee DTR, Department, Late, Absences, Overtime + CSV export |
 | `AuditLog.gs` | Writes every administrative action to the AuditLogs sheet |
 | `Settings.gs` | Org name / small key-value config |
-| `Setup.gs` | **Run once**: creates the spreadsheet, all sheets, headers, demo data |
+| `Setup.gs` | **Run once**: creates the spreadsheet, all sheets, headers, default data; `createAdminAccount()` creates the first admin |
 | `Partial_Styles.html` | Shared CSS (PH-government green theme, responsive, print styles) |
 | `Partial_Scripts.html` | Shared client JS: session storage, `api()` wrapper, toasts, nav guard |
 | `Partial_Sidebar.html` | Desktop sidebar + mobile bottom nav, role-aware |
@@ -97,7 +97,7 @@ Setup complete. Spreadsheet URL: https://docs.google.com/spreadsheets/d/.../edit
 ```
 Open that URL — you should see 8 sheets (Employees, Attendance, Departments,
 Schedules, Holidays, Leave, AuditLogs, Settings) with headers, sample
-departments, a default schedule, sample PH holidays, and two demo accounts.
+departments, a default schedule, and PH holidays. No accounts are created yet.
 
 ### Step 4 — Deploy as a Web App
 **Deploy → New deployment** → gear icon → **Web app**.
@@ -110,14 +110,17 @@ departments, a default schedule, sample PH holidays, and two demo accounts.
 Click **Deploy**, authorize again if asked, then copy the **Web app URL**.
 That URL *is* your LGU Time Tracker site.
 
-### Step 5 — Log in and change the demo passwords
-Open the Web app URL. Log in with:
-- **Admin:** `admin@lgu.local` / `Admin@123`
-- **Employee:** `employee@lgu.local` / `Employee@123`
+### Step 5 — Create the first administrator
+In `Setup.gs`, fill in `FIRST_ADMIN_NAME` and `FIRST_ADMIN_EMAIL`, then select
+`createAdminAccount` and click **Run**. The execution log shows a temporary
+password. Sign in with it and change it right away via **Settings → Change My
+Password**. Other staff can register themselves (an Admin/HR approves them) or
+be added under **Employees**.
 
-Go to **Settings → Change My Password** (admin) or **Profile → Change
-Password** (employee) immediately, and update `admin@lgu.local`'s employee
-record with the real HR administrator's name/email via **Employees → Edit**.
+Upgrading an older install that still has the demo accounts
+(`admin@lgu.local`, `employee@lgu.local`)? Make a real person an Admin first,
+then run `removeDemoAccounts()` from `Setup.gs`. It refuses to run while a demo
+account is the only Admin.
 
 > Every time you edit a `.gs`/`.html` file afterwards, you must **Deploy →
 > Manage deployments → edit (pencil) → New version** for changes to reach the

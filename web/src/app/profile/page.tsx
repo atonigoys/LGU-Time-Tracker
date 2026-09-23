@@ -1,8 +1,9 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
+import { ChangeEvent, useEffect, useRef, useState } from "react";
 import { Camera, Loader2 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { ChangePasswordForm } from "@/components/ChangePasswordForm";
 import { StatusPill } from "@/components/Badge";
 import { Avatar } from "@/components/Avatar";
 import { useRequireAuth, useSession } from "@/lib/session";
@@ -20,8 +21,6 @@ export default function ProfilePage() {
   const { updateUser } = useSession();
   const toast = useToast();
   const [employee, setEmployee] = useState<Employee | null>(null);
-  const [oldPassword, setOldPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -57,18 +56,6 @@ export default function ProfilePage() {
       toast(err instanceof Error ? err.message : "Photo upload failed.", true);
     } finally {
       setUploading(false);
-    }
-  }
-
-  async function handleSubmit(ev: FormEvent) {
-    ev.preventDefault();
-    try {
-      await call("changePassword", { oldPassword, newPassword });
-      toast("Password updated.");
-      setOldPassword("");
-      setNewPassword("");
-    } catch (err) {
-      toast(err instanceof Error ? err.message : "Update failed.", true);
     }
   }
 
@@ -146,21 +133,7 @@ export default function ProfilePage() {
 
       <div id="password" className={`${cls.panel} scroll-mt-20`}>
         <div className={cls.panelTitle}>Change Password</div>
-        <form onSubmit={handleSubmit} className="space-y-3.5">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div>
-              <label className={cls.label}>Current Password</label>
-              <input required type="password" value={oldPassword} onChange={(e) => setOldPassword(e.target.value)} className={cls.input} />
-            </div>
-            <div>
-              <label className={cls.label}>New Password</label>
-              <input required minLength={8} type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className={cls.input} />
-            </div>
-          </div>
-          <button type="submit" className={cls.btn}>
-            Update Password
-          </button>
-        </form>
+        <ChangePasswordForm />
       </div>
     </AppShell>
   );

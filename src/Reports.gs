@@ -17,6 +17,7 @@ function getReport_(token, type, filters) {
   if (filters.employeeId) attendance = attendance.filter(function (r) { return r.EmployeeID === filters.employeeId; });
   if (filters.department) attendance = attendance.filter(function (r) { return empById[r.EmployeeID] && empById[r.EmployeeID].Department === filters.department; });
   if (filters.status) attendance = attendance.filter(function (r) { return r.Status === filters.status; });
+  attendance = attendance.filter(function (r) { return !isAdminAccount_(empById[r.EmployeeID]); });
 
   var enriched = attendance.map(function (r) {
     var e = empById[r.EmployeeID] || {};
@@ -68,7 +69,7 @@ function computeAbsences_(employees, dateFrom, dateTo, department) {
 
   var out = [];
   var active = employees.filter(function (e) {
-    return String(e.Status).toLowerCase() === 'active' && (!department || e.Department === department);
+    return tracksAttendance_(e) && (!department || e.Department === department);
   });
   var start = new Date(dateFrom + 'T00:00:00');
   var end = new Date(dateTo + 'T00:00:00');

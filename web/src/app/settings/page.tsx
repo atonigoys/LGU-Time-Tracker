@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
+import { ChangePasswordForm } from "@/components/ChangePasswordForm";
 import { useRequireAuth } from "@/lib/session";
 import { useToast } from "@/lib/toast";
 import { call } from "@/lib/api";
@@ -12,8 +13,6 @@ export default function SettingsPage() {
   const session = useRequireAuth(["Admin"]);
   const toast = useToast();
   const [orgName, setOrgName] = useState("");
-  const [oldPassword, setOldPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
 
   useEffect(() => {
     if (!session) return;
@@ -27,18 +26,6 @@ export default function SettingsPage() {
       toast("Saved.");
     } catch (err) {
       toast(err instanceof Error ? err.message : "Save failed.", true);
-    }
-  }
-
-  async function changePassword(ev: FormEvent) {
-    ev.preventDefault();
-    try {
-      await call("changePassword", { oldPassword, newPassword });
-      toast("Password updated.");
-      setOldPassword("");
-      setNewPassword("");
-    } catch (err) {
-      toast(err instanceof Error ? err.message : "Update failed.", true);
     }
   }
 
@@ -66,21 +53,7 @@ export default function SettingsPage() {
 
       <div className={cls.panel}>
         <div className={cls.panelTitle}>Change My Password</div>
-        <form onSubmit={changePassword} className="space-y-3.5">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div>
-              <label className={cls.label}>Current Password</label>
-              <input required type="password" value={oldPassword} onChange={(e) => setOldPassword(e.target.value)} className={cls.input} />
-            </div>
-            <div>
-              <label className={cls.label}>New Password</label>
-              <input required minLength={8} type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className={cls.input} />
-            </div>
-          </div>
-          <button type="submit" className={cls.btn}>
-            Update Password
-          </button>
-        </form>
+        <ChangePasswordForm />
       </div>
     </AppShell>
   );
