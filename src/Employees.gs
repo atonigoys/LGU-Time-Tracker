@@ -190,7 +190,7 @@ function getActiveDepartments_() {
 }
 
 var PROFILE_PHOTO_FOLDER_ID = '1YG4Rm7SlsB-hSDRyEvIUaHVwe1lxqDVt';
-var PROFILE_PHOTO_FOLDER_NAME = 'LGU Time Tracker - Profile Photos';
+var PROFILE_PHOTO_FOLDER_NAME = 'LGU Employee';
 var MAX_PHOTO_BASE64_CHARS = 3000000; // ~2.2MB raw, generous given client-side resizing
 
 /**
@@ -217,10 +217,11 @@ function uploadProfilePhoto_(token, base64Data, mimeType) {
   } catch (e) {
     return apiError_('Could not read the uploaded image.');
   }
-  var blob = Utilities.newBlob(bytes, mimeType, session.employeeId + '-' + new Date().getTime() + '.' + ext);
+  var blob = Utilities.newBlob(bytes, mimeType, photoFileName_(emp, ext));
 
   var folder = getOrCreatePhotoFolder_();
   var file = folder.createFile(blob);
+  file.setDescription('Profile photo of ' + (emp.FullName || '') + ' (' + emp.EmployeeID + ')');
   file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
   // The old "uc?export=view" link no longer renders in <img> tags; the
   // thumbnail endpoint does, as long as the file is shared by link.
@@ -231,6 +232,41 @@ function uploadProfilePhoto_(token, base64Data, mimeType) {
   updateRow_('Employees', emp._row, { PhotoURL: photoUrl });
   logAudit_(session.employeeId, 'UPDATE_PROFILE_PHOTO', session.employeeId, '', '');
   return apiOk_({ photoUrl: photoUrl });
+}
+
+/**
+ * Photo files are named after the employee (e.g. "Francis Tom.jpg") so the
+ * Drive folder is easy to browse. Characters Drive/OSes dislike are removed.
+ */
+function photoFileName_(emp, ext) {
+  var safeName = String(emp.FullName || '').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim() || emp.EmployeeID;
+  return safeName + '.' + ext;
+}
+
+/**
+ * One-time: renames photos uploaded before files were named after employees
+ * to "<Full Name>.<ext>". Run from the Apps Script editor.
+ */
+function renameProfilePhotos() {
+  var folder = getOrCreatePhotoFolder_();
+  var renamed = 0;
+  sheetToObjects_('Employees').forEach(function (emp) {
+    var match = String(emp.PhotoURL || '').match(/[?&]id=([^&]+)/);
+    if (!match) return;
+    try {
+      var file = DriveApp.getFileById(match[1]);
+      var ext = (file.getName().match(/\.(\w+)$/) || [null, 'jpg'])[1];
+      var name = photoFileName_(emp, ext);
+      if (file.getName() !== name) {
+        file.setName(name);
+        file.setDescription('Profile photo of ' + (emp.FullName || '') + ' (' + emp.EmployeeID + ')');
+        renamed++;
+      }
+    } catch (e) {
+      Logger.log('Skipped ' + emp.EmployeeID + ': photo file not found.');
+    }
+  });
+  Logger.log('Renamed ' + renamed + ' photo(s) in "' + folder.getName() + '".');
 }
 
 function getOrCreatePhotoFolder_() {
