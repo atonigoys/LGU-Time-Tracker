@@ -74,7 +74,7 @@ export default function LoginPage() {
     setError("");
     setBusy(true);
     try {
-      await login(email, password);
+      await login(email, password, rememberMe);
       setSuccess(true);
       // redirect handled by the effect above once session updates
     } catch (err) {

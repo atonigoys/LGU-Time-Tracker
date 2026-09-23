@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { ReactNode, useEffect, useState } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import * as Tooltip from "@radix-ui/react-tooltip";
-import { Bell, ChevronDown, Loader2, LogOut, PanelLeftClose, PanelLeftOpen, Settings, UserCircle } from "lucide-react";
+import { ArrowLeftRight, Bell, ChevronDown, Loader2, LogOut, PanelLeftClose, PanelLeftOpen, Settings, UserCircle } from "lucide-react";
 import { useSession } from "@/lib/session";
 import { useNotifications } from "@/lib/notifications";
 import { LogoutDialog } from "@/components/LogoutDialog";
@@ -43,7 +43,7 @@ const menuContentCls =
   "z-[150] min-w-[220px] rounded-xl border border-gray-200 bg-white p-1.5 shadow-lg data-[state=open]:animate-[fade-in_150ms_ease-out]";
 
 export function AppShell({ title, children }: { title: string; children: ReactNode }) {
-  const { session, logout } = useSession();
+  const { session, logout, switchAccount } = useSession();
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const notifications = useNotifications(session?.user.role);
@@ -281,6 +281,13 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
                       <Link href={accountSettingsHref}>
                         <Settings size={16} className="text-gray-400" /> Account Settings
                       </Link>
+                    </DropdownMenu.Item>
+                    <DropdownMenu.Item onSelect={switchAccount} className={menuItemCls}>
+                      <ArrowLeftRight size={16} className="text-gray-400" />
+                      <span>
+                        Switch account
+                        <span className="block text-[11.5px] text-gray-400">Sign in as someone else in this tab</span>
+                      </span>
                     </DropdownMenu.Item>
                     <DropdownMenu.Separator className="my-1 h-px bg-gray-100" />
                     <DropdownMenu.Item

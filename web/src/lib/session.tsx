@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useRef, useState, useCallback, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { call } from "./api";
 import * as storage from "./storage";
@@ -10,8 +10,10 @@ import type { Role, Session, SessionUser } from "./types";
 interface SessionContextValue {
   session: Session | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, remember?: boolean) => Promise<void>;
   logout: () => Promise<void>;
+  /** Signs out of this tab only, so another account can sign in here. */
+  switchAccount: () => void;
   updateUser: (patch: Partial<SessionUser>) => void;
 }
 
@@ -20,42 +22,15 @@ const SessionContext = createContext<SessionContextValue | null>(null);
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [session, setSessionState] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const sessionRef = useRef<Session | null>(null);
-
-  useEffect(() => {
-    sessionRef.current = session;
-  }, [session]);
-
   useEffect(() => {
     setSessionState(storage.getSession());
     setLoading(false);
   }, []);
 
-  useEffect(() => {
-    // The session lives in localStorage, which all tabs share, and every API
-    // call reads the token from there. If another tab logs in as someone else
-    // (or logs out), this tab must switch too - otherwise it keeps showing the
-    // old user while its requests run as the new one.
-    function onStorage(e: StorageEvent) {
-      if (e.key !== null && e.key !== storage.SESSION_KEY) return;
-      const prev = sessionRef.current;
-      const next = storage.getSession();
-      if (prev?.token === next?.token) return;
-      if (prev && next && prev.user.employeeId !== next.user.employeeId) {
-        // Different account: reload so no page keeps the old user's data on screen.
-        window.location.replace(homeForRole(next.user.role));
-        return;
-      }
-      setSessionState(next);
-    }
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
-
-  const login = useCallback(async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string, remember = true) => {
     const res = await call<{ token: string; user: SessionUser; home?: Record<string, unknown> }>("login", { email, password });
     const next: Session = { token: res.token, user: res.user };
-    storage.setSession(next);
+    storage.setSession(next, remember);
     prefetchHome(res.user.role, res.home);
     setSessionState(next);
   }, []);
@@ -69,6 +44,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (token) call("logout", { token }).catch(() => {});
   }, []);
 
+  const switchAccount = useCallback(() => {
+    storage.forgetTabSession();
+    setSessionState(null);
+  }, []);
+
   const updateUser = useCallback((patch: Partial<SessionUser>) => {
     setSessionState((prev) => {
       if (!prev) return prev;
@@ -79,7 +59,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <SessionContext.Provider value={{ session, loading, login, logout, updateUser }}>
+    <SessionContext.Provider value={{ session, loading, login, logout, switchAccount, updateUser }}>
       {children}
     </SessionContext.Provider>
   );
