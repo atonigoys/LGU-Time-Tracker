@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { AlertCircle, Info, Loader2, LogOut, X } from "lucide-react";
+import { AlertCircle, Loader2, LogOut, X } from "lucide-react";
 import { Avatar } from "@/components/Avatar";
 
 /**
@@ -114,14 +114,6 @@ export function LogoutDialog({
               </div>
             </div>
           )}
-
-          <div className={`${user ? "mt-3" : "mt-5"} flex gap-2.5 rounded-xl border border-green-200/70 bg-green-50/70 px-3.5 py-3`}>
-            <Info size={17} className="mt-px shrink-0 text-green-700" aria-hidden />
-            <div className="text-[13.5px] leading-normal">
-              <div className="font-semibold text-green-900">Your current session will be ended.</div>
-              <div className="text-gray-600">Make sure to save any unsaved changes.</div>
-            </div>
-          </div>
 
           {error && (
             <div role="alert" className="mt-3 flex items-center gap-2 text-[13px] text-red-700">
