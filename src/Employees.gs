@@ -81,8 +81,17 @@ function updateEmployee_(token, employeeId, data) {
   }
   if (data.Role && ['Admin', 'HR', 'Employee'].indexOf(data.Role) === -1) return apiError_('Invalid role.');
 
+  // Log only what actually changed, as before/after values.
+  var before = {};
+  var after = {};
+  Object.keys(patch).forEach(function (k) {
+    if (String(emp[k] === undefined ? '' : emp[k]) !== String(patch[k])) {
+      before[k] = emp[k];
+      after[k] = patch[k];
+    }
+  });
   updateRow_('Employees', emp._row, patch);
-  logAudit_(session.employeeId, 'UPDATE_EMPLOYEE', employeeId, emp, patch);
+  if (Object.keys(after).length) logAudit_(session.employeeId, 'UPDATE_EMPLOYEE', employeeId, before, after);
   return apiOk_({ employee: sanitizeEmployee_(findRow_('Employees', 'EmployeeID', employeeId)) });
 }
 

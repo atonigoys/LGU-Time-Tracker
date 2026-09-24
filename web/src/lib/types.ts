@@ -111,16 +111,6 @@ export interface LeaveRequest {
   ApprovedBy: string;
 }
 
-export interface AuditLog {
-  LogID: string;
-  UserID: string;
-  Action: string;
-  Target: string;
-  OldValue: string;
-  NewValue: string;
-  Timestamp: string;
-}
-
 export interface TodayStats {
   totalEmployees: number;
   presentToday: number;
