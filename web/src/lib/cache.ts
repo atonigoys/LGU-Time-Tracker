@@ -163,11 +163,14 @@ export function fetchAndCache<T>(action: string, payload: Record<string, unknown
 export function cachedCall<T>(
   action: string,
   payload: Record<string, unknown>,
-  onData: (data: T, fromCache: boolean) => void
+  onData: (data: T, fromCache: boolean) => void,
+  opts: { revalidate?: boolean } = {}
 ): Promise<T> {
   const entry = readEntry<T>(cacheKey(action, payload));
   const cached = entry?.data;
-  if (entry && !entry.stale && Date.now() - entry.at < FRESH_MS) {
+  // revalidate: data another person changes (e.g. a leave decision) - always
+  // confirm with the server, still showing the cached copy meanwhile.
+  if (!opts.revalidate && entry && !entry.stale && Date.now() - entry.at < FRESH_MS) {
     // Just fetched - use it without another round trip.
     return Promise.resolve().then(() => {
       onData(entry.data, false);

@@ -38,6 +38,23 @@ function dutyInfo_(leavesByEmp, employeeId, dateStr) {
   };
 }
 
+/**
+ * Makes room for a new period [from, to] for an employee: approved periods
+ * fully inside it are cancelled, partly overlapping ones are trimmed.
+ * exceptId skips the row being approved itself.
+ */
+function replaceOverlappingPeriods_(employeeId, from, to, reviewerId, exceptId) {
+  sheetToObjects_('Leave').forEach(function (l) {
+    if (l.EmployeeID !== employeeId || l.Status !== 'Approved' || l.LeaveID === exceptId) return;
+    var s = String(l.StartDate);
+    var e = String(l.EndDate);
+    if (e < from || s > to) return;
+    if (s >= from && e <= to) updateRow_('Leave', l._row, { Status: 'Cancelled', ApprovedBy: reviewerId });
+    else if (s < from) updateRow_('Leave', l._row, { EndDate: addDaysStr_(from, -1) });
+    else updateRow_('Leave', l._row, { StartDate: addDaysStr_(to, 1) });
+  });
+}
+
 function approvedLeavesByEmp_() {
   var byEmp = {};
   sheetToObjects_('Leave').forEach(function (l) {
@@ -67,11 +84,10 @@ function setDutyStatus_(token, data) {
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(15000)) return apiError_('The system is busy. Please try again.');
   try {
-    var mine = sheetToObjects_('Leave').filter(function (l) {
-      return l.EmployeeID === emp.EmployeeID && l.Status === 'Approved';
-    });
-
     if (status === 'On Duty') {
+      var mine = sheetToObjects_('Leave').filter(function (l) {
+        return l.EmployeeID === emp.EmployeeID && l.Status === 'Approved';
+      });
       var current = mine.filter(function (l) { return String(l.StartDate) <= today && today <= String(l.EndDate); });
       if (!current.length) return apiError_(emp.FullName + ' is already on duty.');
       current.forEach(function (l) {
@@ -97,15 +113,7 @@ function setDutyStatus_(token, data) {
     if (to < from) return apiError_('The end date must be on or after the start date.');
     if (to > addDaysStr_(today, 366)) return apiError_('Dates can be set up to one year ahead.');
 
-    // Replace overlapping periods: drop ones fully inside, trim the rest.
-    mine.forEach(function (l) {
-      var s = String(l.StartDate);
-      var e = String(l.EndDate);
-      if (e < from || s > to) return;
-      if (s >= from && e <= to) updateRow_('Leave', l._row, { Status: 'Cancelled', ApprovedBy: session.employeeId });
-      else if (s < from) updateRow_('Leave', l._row, { EndDate: addDaysStr_(from, -1) });
-      else updateRow_('Leave', l._row, { StartDate: addDaysStr_(to, 1) });
-    });
+    replaceOverlappingPeriods_(emp.EmployeeID, from, to, session.employeeId, null);
 
     var record = {
       LeaveID: generateId_('LV'),

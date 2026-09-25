@@ -134,7 +134,8 @@ function routeAction_(action, p, e) {
     // --- Leave ---
     case 'getLeaves': return getLeaves_(p.token, p.employeeId);
     case 'requestLeave': return requestLeave_(p.token, p.data || {});
-    case 'updateLeaveStatus': return updateLeaveStatus_(p.token, p.leaveId, p.status);
+    case 'updateLeaveStatus': return updateLeaveStatus_(p.token, p.leaveId, p.status, p.remarks);
+    case 'cancelLeaveRequest': return cancelLeaveRequest_(p.token, p.leaveId);
 
     // --- Reports ---
     case 'getReport': return getReport_(p.token, p.type, p.filters || {});

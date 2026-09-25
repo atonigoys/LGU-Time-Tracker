@@ -49,8 +49,12 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
   const { session, logout, switchAccount } = useSession();
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
-  const notifications = useNotifications(session?.user.role);
   const toast = useToast();
+  const notif = useNotifications(session?.user.role, session?.user.employeeId, (fresh) => {
+    const l = fresh[0];
+    toast(fresh.length === 1 ? `Your ${l.LeaveType} leave was ${l.Status.toLowerCase()}.` : `${fresh.length} of your leave requests were reviewed.`, l.Status === "Rejected" && fresh.length === 1);
+  });
+  const notifications = notif.items;
   const [openAnnouncement, setOpenAnnouncement] = useState<Announcement | null>(null);
   const ann = useAnnouncements(session?.user.employeeId, (fresh) => {
     toast(fresh.length === 1 ? `New announcement: ${fresh[0].Title}` : `You have ${fresh.length} new announcements.`);
@@ -153,16 +157,19 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
                       className={`shrink-0 ${active ? "text-amber-300" : "text-green-100/70 group-hover:text-white"}`}
                     />
                     {!collapsed && <span className="truncate">{item.label}</span>}
-                    {item.href === "/my-announcements" && ann.unreadCount > 0 && (
-                      collapsed ? (
+                    {(() => {
+                      const count =
+                        item.href === "/my-announcements" ? ann.unreadCount : item.href === "/leave-requests" ? notif.pendingLeaves : item.href === "/my-leave" ? notif.unseenDecisions : 0;
+                      if (!count) return null;
+                      return collapsed ? (
                         <span aria-hidden className="absolute top-1.5 right-3 h-2 w-2 rounded-full bg-red-500 ring-2 ring-green-900" />
                       ) : (
                         <span className="ml-auto rounded-full bg-red-600 px-1.5 py-px text-[10.5px] font-bold text-white tabular-nums">
-                          {ann.unreadCount > 9 ? "9+" : ann.unreadCount}
-                          <span className="sr-only"> unread</span>
+                          {count > 9 ? "9+" : count}
+                          <span className="sr-only"> new</span>
                         </span>
-                      )
-                    )}
+                      );
+                    })()}
                   </Link>
                 );
                 return (
@@ -279,7 +286,11 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
                     {notifications.map((n) => (
                       <DropdownMenu.Item key={n.id} asChild className={`${menuItemCls} items-start`}>
                         <Link href={n.href}>
-                          <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-amber-500" />
+                          <span
+                            className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${
+                              n.tone === "success" ? "bg-green-600" : n.tone === "danger" ? "bg-red-500" : "bg-amber-500"
+                            }`}
+                          />
                           <span>
                             <span className="block font-semibold text-gray-900">{n.title}</span>
                             <span className="block text-[12px] text-gray-500">{n.detail}</span>
@@ -418,8 +429,8 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
               >
                 <span className="relative">
                   <Icon size={18} strokeWidth={2} />
-                  {item.href === "/my-announcements" && ann.unreadCount > 0 && (
-                    <span aria-label={`${ann.unreadCount} unread`} className="absolute -top-1 -right-1.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-green-950" />
+                  {((item.href === "/my-announcements" && ann.unreadCount > 0) || (item.href === "/my-leave" && notif.unseenDecisions > 0)) && (
+                    <span aria-label="New" className="absolute -top-1 -right-1.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-green-950" />
                   )}
                 </span>
                 {item.shortLabel ?? item.label}

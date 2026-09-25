@@ -63,7 +63,10 @@ const ACTIONS: Record<string, { label: string; category: AuditCategory }> = {
   DELETE_HOLIDAY: { label: "Deleted holiday", category: "config" },
   CREATE_DEPARTMENT: { label: "Added department", category: "config" },
   UPDATE_DEPARTMENT: { label: "Updated department", category: "config" },
-  REQUEST_LEAVE: { label: "Requested leave", category: "employee" },
+  REQUEST_LEAVE: { label: "Filed leave", category: "employee" },
+  CANCEL_LEAVE: { label: "Cancelled leave request", category: "employee" },
+  APPROVE_LEAVE: { label: "Approved leave", category: "employee" },
+  REJECT_LEAVE: { label: "Rejected leave", category: "employee" },
   UPDATE_LEAVE_STATUS: { label: "Reviewed leave", category: "employee" },
   CREATE_ANNOUNCEMENT: { label: "Posted announcement", category: "config" },
   UPDATE_ANNOUNCEMENT: { label: "Edited announcement", category: "config" },
@@ -221,6 +224,11 @@ export function summarize(e: AuditEntry): string {
       return `“${String(n.Title ?? "")}”${n.Priority === "Important" ? " · Important" : ""}`;
     case "DELETE_ANNOUNCEMENT":
       return `Deleted “${String(o.Title ?? "")}”`;
+    case "APPROVE_LEAVE":
+    case "REJECT_LEAVE": {
+      const r = n.StartDate ? (n.StartDate === n.EndDate ? formatDate(String(n.StartDate)) : `${formatDate(String(n.StartDate))} – ${formatDate(String(n.EndDate))}`) : "";
+      return [n.LeaveType && `${String(n.LeaveType)} leave`, r, n.Remarks && `“${String(n.Remarks)}”`].filter(Boolean).join(" · ");
+    }
     case "SET_DUTY_STATUS": {
       const st = String(n.Status ?? "");
       if (st === "On Duty") return `Back on duty${o.Status ? ` (was ${String(o.Status)})` : ""}`;

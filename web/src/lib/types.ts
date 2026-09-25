@@ -113,16 +113,31 @@ export interface Holiday {
   Status: "Active" | "Inactive";
 }
 
+export type LeaveStatus = "Pending" | "Approved" | "Rejected" | "Cancelled";
+
 export interface LeaveRequest {
   LeaveID: string;
   EmployeeID: string;
+  EmployeeName: string;
+  Department: string;
+  LeaveType: string;
+  /** "yyyy-MM-dd" */
   StartDate: string;
   EndDate: string;
-  LeaveType: string;
+  Days: number;
   Reason: string;
-  Status: "Pending" | "Approved" | "Rejected";
-  ApprovedBy: string;
+  Status: LeaveStatus;
+  /** "Employee" = filed by the employee, "HR" = entered directly via Set Status */
+  Source: "Employee" | "HR";
+  /** "yyyy-MM-dd HH:mm:ss" Philippine time */
+  FiledAt: string;
+  ReviewedBy: string;
+  ReviewedByName: string;
+  ReviewedAt: string;
+  Remarks: string;
 }
+
+export const LEAVE_TYPES = ["Vacation", "Sick", "Emergency", "Maternity", "Paternity", "Special Privilege", "Other"];
 
 export interface TodayStats {
   totalEmployees: number;

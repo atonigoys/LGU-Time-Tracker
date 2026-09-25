@@ -12,7 +12,7 @@ var SHEET_HEADERS = {
   Departments: ['DepartmentID', 'DepartmentName', 'DepartmentHead', 'Status'],
   Schedules: ['ScheduleID', 'ScheduleName', 'StartTime', 'EndTime', 'LunchStart', 'LunchEnd', 'GraceMinutes', 'Status'],
   Holidays: ['HolidayID', 'Date', 'HolidayName', 'Type', 'Status'],
-  Leave: ['LeaveID', 'EmployeeID', 'StartDate', 'EndDate', 'LeaveType', 'Reason', 'Status', 'ApprovedBy'],
+  Leave: ['LeaveID', 'EmployeeID', 'StartDate', 'EndDate', 'LeaveType', 'Reason', 'Status', 'ApprovedBy', 'FiledAt', 'ReviewedAt', 'Remarks'],
   AuditLogs: ['LogID', 'UserID', 'Action', 'Target', 'OldValue', 'NewValue', 'Timestamp'],
   Settings: ['Key', 'Value', 'Description'],
   Announcements: ['AnnouncementID', 'Title', 'Message', 'Priority', 'Status', 'CreatedBy', 'CreatedAt', 'UpdatedAt']
@@ -47,17 +47,27 @@ function getDatabase_() {
   return ss;
 }
 
+var checkedHeaders_ = {};
+
 function getSheet_(name) {
   var ss = getDatabase_();
   var sheet = ss.getSheetByName(name);
+  var headers = SHEET_HEADERS[name];
   if (!sheet) {
     sheet = ss.insertSheet(name);
-    var headers = SHEET_HEADERS[name];
     if (headers) {
       sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
       sheet.setFrozenRows(1);
     }
+  } else if (headers && !checkedHeaders_[name]) {
+    // Columns added in later versions (e.g. Leave.FiledAt) are appended to
+    // existing sheets' header rows once, so reads and writes line up.
+    var lastCol = sheet.getLastColumn();
+    if (lastCol < headers.length) {
+      sheet.getRange(1, lastCol + 1, 1, headers.length - lastCol).setValues([headers.slice(lastCol)]);
+    }
   }
+  checkedHeaders_[name] = true;
   return sheet;
 }
 
@@ -199,6 +209,12 @@ function combineDateAndTime_(dateStr, timeValue) {
   if (!t) return null;
   var p = String(dateStr).split('-');
   return new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]), t.h, t.m, 0);
+}
+
+/** "2026-09-23" -> "Sep 23, 2026" (falls back to the raw value). */
+function shortDate_(dateStr) {
+  var d = combineDateAndTime_(String(dateStr), '00:00');
+  return d ? formatDatePH_(d, 'MMM d, yyyy') : String(dateStr || '');
 }
 
 /** "yyyy-MM-dd" shifted by n days (calendar math in the script timezone). */
