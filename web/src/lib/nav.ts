@@ -37,6 +37,7 @@ export const SIDEBAR_NAV: NavItem[] = [
   { href: "/employee-dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["Employee"] },
   { href: "/my-attendance", label: "My Attendance", icon: CalendarClock, roles: ["Employee"] },
   { href: "/my-qr", label: "My QR Code", icon: IdCard, roles: ["Employee"] },
+  { href: "/my-announcements", label: "Announcements", icon: Megaphone, roles: ["Employee"] },
   { href: "/profile", label: "My Profile", icon: UserCircle, roles: ["Employee"] },
 ];
 
@@ -49,5 +50,6 @@ export const BOTTOM_NAV: NavItem[] = [
   { href: "/employee-dashboard", label: "Home", icon: LayoutDashboard, roles: ["Employee"] },
   { href: "/my-attendance", label: "DTR", icon: CalendarClock, roles: ["Employee"] },
   { href: "/my-qr", label: "My QR", icon: IdCard, roles: ["Employee"] },
+  { href: "/my-announcements", label: "News", icon: Megaphone, roles: ["Employee"] },
   { href: "/profile", label: "Profile", icon: UserCircle, roles: ["Employee"] },
 ];

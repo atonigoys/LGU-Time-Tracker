@@ -153,6 +153,16 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
                       className={`shrink-0 ${active ? "text-amber-300" : "text-green-100/70 group-hover:text-white"}`}
                     />
                     {!collapsed && <span className="truncate">{item.label}</span>}
+                    {item.href === "/my-announcements" && ann.unreadCount > 0 && (
+                      collapsed ? (
+                        <span aria-hidden className="absolute top-1.5 right-3 h-2 w-2 rounded-full bg-red-500 ring-2 ring-green-900" />
+                      ) : (
+                        <span className="ml-auto rounded-full bg-red-600 px-1.5 py-px text-[10.5px] font-bold text-white tabular-nums">
+                          {ann.unreadCount > 9 ? "9+" : ann.unreadCount}
+                          <span className="sr-only"> unread</span>
+                        </span>
+                      )
+                    )}
                   </Link>
                 );
                 return (
@@ -310,14 +320,14 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
                         })}
                       </div>
                     )}
-                    {(role === "Admin" || role === "HR") && (
-                      <>
-                        <DropdownMenu.Separator className="my-1 h-px bg-gray-100" />
-                        <DropdownMenu.Item asChild className={`${menuItemCls} justify-center font-semibold text-green-800`}>
-                          <Link href="/announcements">Manage announcements</Link>
-                        </DropdownMenu.Item>
-                      </>
-                    )}
+                    <DropdownMenu.Separator className="my-1 h-px bg-gray-100" />
+                    <DropdownMenu.Item asChild className={`${menuItemCls} justify-center font-semibold text-green-800`}>
+                      {role === "Admin" || role === "HR" ? (
+                        <Link href="/announcements">Manage announcements</Link>
+                      ) : (
+                        <Link href="/my-announcements">View all announcements</Link>
+                      )}
+                    </DropdownMenu.Item>
                   </DropdownMenu.Content>
                 </DropdownMenu.Portal>
               </DropdownMenu.Root>
@@ -406,7 +416,12 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
                   active ? "font-semibold text-amber-400" : "text-white/75"
                 }`}
               >
-                <Icon size={18} strokeWidth={2} />
+                <span className="relative">
+                  <Icon size={18} strokeWidth={2} />
+                  {item.href === "/my-announcements" && ann.unreadCount > 0 && (
+                    <span aria-label={`${ann.unreadCount} unread`} className="absolute -top-1 -right-1.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-green-950" />
+                  )}
+                </span>
                 {item.shortLabel ?? item.label}
               </Link>
             );
