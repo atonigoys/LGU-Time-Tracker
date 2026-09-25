@@ -41,6 +41,7 @@ export default function LeaveRequestsPage() {
   const [tab, setTab] = useState<LeaveStatus | "All">("Pending");
   const [search, setSearch] = useState("");
   const [review, setReview] = useState<Review>(null);
+  const [saving, setSaving] = useState<Set<string>>(() => new Set());
 
   const load = useCallback(async () => {
     setError(false);
@@ -73,11 +74,11 @@ export default function LeaveRequestsPage() {
   const list = useMemo(() => {
     const q = search.trim().toLowerCase();
     return (leaves ?? [])
-      .filter((l) => tab === "All" || l.Status === tab)
+      .filter((l) => tab === "All" || l.Status === tab || (tab === "Pending" && saving.has(l.LeaveID)))
       .filter((l) => !q || `${l.EmployeeName} ${l.EmployeeID} ${l.Department} ${l.LeaveType}`.toLowerCase().includes(q))
       // Pending: oldest first so nothing waits too long; others newest first.
       .sort((a, b) => (tab === "Pending" ? 1 : -1) * (a.FiledAt || a.StartDate).localeCompare(b.FiledAt || b.StartDate));
-  }, [leaves, tab, search]);
+  }, [leaves, tab, search, saving]);
 
   if (!session) return null;
 
@@ -173,7 +174,11 @@ export default function LeaveRequestsPage() {
                     </div>
                     {l.Remarks && <div className="mt-1 text-[12.5px] text-gray-600">Remarks: “{l.Remarks}”</div>}
                   </div>
-                  {l.Status === "Pending" && (
+                  {saving.has(l.LeaveID) ? (
+                    <span className="inline-flex shrink-0 items-center gap-1.5 text-[12.5px] text-gray-500">
+                      <Loader2 size={14} className="animate-spin" /> Saving…
+                    </span>
+                  ) : l.Status === "Pending" && (
                     <div className="flex shrink-0 gap-1.5">
                       <button onClick={() => setReview({ leave: l, decision: "Rejected" })} className={`${cls.btnSecondary} ${cls.btnSmall} text-red-600 hover:bg-red-50`}>
                         <X size={14} /> Reject
@@ -193,11 +198,27 @@ export default function LeaveRequestsPage() {
       <ReviewDialog
         review={review}
         onClose={() => setReview(null)}
-        onDone={(leaveId, decision, remarks, message) => {
-          setLeaves((prev) => prev?.map((x) => (x.LeaveID === leaveId ? { ...x, Status: decision, Remarks: remarks } : x)) ?? prev);
+        onSubmit={async (leave, decision, remarks) => {
+          // Close and update right away; the server confirms in the background.
+          const before = leave;
+          const name = session.user.fullName;
           setReview(null);
-          toast(message);
-          load();
+          setLeaves((prev) => prev?.map((x) => (x.LeaveID === leave.LeaveID ? { ...x, Status: decision, Remarks: remarks, ReviewedByName: name } : x)) ?? prev);
+          setSaving((s) => new Set(s).add(leave.LeaveID));
+          try {
+            await call("updateLeaveStatus", { leaveId: leave.LeaveID, status: decision, remarks });
+            toast(decision === "Approved" ? `Leave approved. ${leave.EmployeeName} is set On Leave for those dates.` : "Leave request rejected.");
+          } catch (err) {
+            setLeaves((prev) => prev?.map((x) => (x.LeaveID === leave.LeaveID ? before : x)) ?? prev);
+            toast(err instanceof Error ? err.message : "Unable to update the request. Please try again.", true);
+          } finally {
+            setSaving((s) => {
+              const n = new Set(s);
+              n.delete(leave.LeaveID);
+              return n;
+            });
+            load();
+          }
         }}
       />
     </AppShell>
@@ -207,11 +228,11 @@ export default function LeaveRequestsPage() {
 function ReviewDialog({
   review,
   onClose,
-  onDone,
+  onSubmit,
 }: {
   review: Review;
   onClose: () => void;
-  onDone: (leaveId: string, decision: "Approved" | "Rejected", remarks: string, message: string) => void;
+  onSubmit: (leave: LeaveRequest, decision: "Approved" | "Rejected", remarks: string) => void;
 }) {
   return (
     <Dialog.Root open={!!review} onOpenChange={(open) => !open && onClose()}>
@@ -221,7 +242,7 @@ function ReviewDialog({
           aria-describedby={undefined}
           className="fixed top-1/2 left-1/2 z-[210] w-[calc(100vw-32px)] max-w-[460px] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl border border-gray-200/70 bg-white shadow-[0_16px_40px_-12px_rgba(15,23,42,0.28)] focus:outline-none data-[state=open]:animate-[modal-in_180ms_ease-out]"
         >
-          {review && <ReviewForm key={review.leave.LeaveID + review.decision} review={review} onClose={onClose} onDone={onDone} />}
+          {review && <ReviewForm key={review.leave.LeaveID + review.decision} review={review} onClose={onClose} onSubmit={onSubmit} />}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
@@ -231,36 +252,21 @@ function ReviewDialog({
 function ReviewForm({
   review,
   onClose,
-  onDone,
+  onSubmit,
 }: {
   review: NonNullable<Review>;
   onClose: () => void;
-  onDone: (leaveId: string, decision: "Approved" | "Rejected", remarks: string, message: string) => void;
+  onSubmit: (leave: LeaveRequest, decision: "Approved" | "Rejected", remarks: string) => void;
 }) {
   const { leave, decision } = review;
   const approving = decision === "Approved";
   const [remarks, setRemarks] = useState("");
   const [error, setError] = useState("");
-  const [saving, setSaving] = useState(false);
 
-  async function submit(ev: FormEvent) {
+  function submit(ev: FormEvent) {
     ev.preventDefault();
-    if (saving) return;
     if (!approving && !remarks.trim()) return setError("Please give a reason for rejecting.");
-    setSaving(true);
-    setError("");
-    try {
-      await call("updateLeaveStatus", { leaveId: leave.LeaveID, status: decision, remarks: remarks.trim() });
-      onDone(
-        leave.LeaveID,
-        decision,
-        remarks.trim(),
-        approving ? `Leave approved. ${leave.EmployeeName} is set On Leave for those dates.` : "Leave request rejected."
-      );
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to update the request. Please try again.");
-      setSaving(false);
-    }
+    onSubmit(leave, decision, remarks.trim());
   }
 
   return (
@@ -328,13 +334,11 @@ function ReviewForm({
         </button>
         <button
           type="submit"
-          disabled={saving}
-          className={`inline-flex h-11 min-w-[140px] items-center justify-center gap-2 rounded-[10px] px-5 text-[14px] font-semibold text-white transition-colors disabled:opacity-80 ${
+          className={`inline-flex h-11 min-w-[140px] items-center justify-center gap-2 rounded-[10px] px-5 text-[14px] font-semibold text-white transition-colors ${
             approving ? "bg-green-700 hover:bg-green-800" : "bg-red-600 hover:bg-red-700"
           }`}
         >
-          {saving && <Loader2 size={16} className="animate-spin" />}
-          {saving ? "Saving…" : approving ? "Yes, approve" : "Yes, reject"}
+          {approving ? "Yes, approve" : "Yes, reject"}
         </button>
       </div>
     </form>

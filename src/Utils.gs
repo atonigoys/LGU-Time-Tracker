@@ -138,10 +138,21 @@ function appendRow_(name, obj) {
 function updateRow_(name, rowNumber, patch) {
   var sheet = getSheet_(name);
   var headers = SHEET_HEADERS[name];
-  Object.keys(patch).forEach(function (key) {
-    var col = headers.indexOf(key);
-    if (col > -1) sheet.getRange(rowNumber, col + 1).setValue(patch[key]);
-  });
+  var cols = Object.keys(patch)
+    .map(function (key) { return { key: key, col: headers.indexOf(key) }; })
+    .filter(function (c) { return c.col > -1; });
+  if (!cols.length) return;
+  if (cols.length === 1) {
+    sheet.getRange(rowNumber, cols[0].col + 1).setValue(patch[cols[0].key]);
+    return;
+  }
+  // Several columns: one read and one write of the span instead of a call per cell.
+  var min = Math.min.apply(null, cols.map(function (c) { return c.col; }));
+  var max = Math.max.apply(null, cols.map(function (c) { return c.col; }));
+  var range = sheet.getRange(rowNumber, min + 1, 1, max - min + 1);
+  var values = range.getValues();
+  cols.forEach(function (c) { values[0][c.col - min] = patch[c.key]; });
+  range.setValues(values);
 }
 
 /** Finds the first object in a sheet where field === value. Returns null if none. */
