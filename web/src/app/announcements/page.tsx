@@ -12,7 +12,7 @@ import { useConfirm } from "@/lib/confirm";
 import { call } from "@/lib/api";
 import { cachedCall } from "@/lib/cache";
 import { cls } from "@/lib/ui";
-import type { Announcement } from "@/lib/announcements";
+import { notifyAnnouncementsChanged, type Announcement } from "@/lib/announcements";
 
 const TITLE_MAX = 120;
 const MESSAGE_MAX = 2000;
@@ -95,6 +95,7 @@ export default function AnnouncementsPage() {
     setSaving(true);
     try {
       await call("saveAnnouncement", { data: { ...form, Title: title, Message: message } });
+      notifyAnnouncementsChanged();
       toast(editing ? "Announcement updated." : "Announcement posted. Employees will be notified.");
       setForm(emptyForm);
       load();
@@ -125,6 +126,7 @@ export default function AnnouncementsPage() {
       await call("saveAnnouncement", {
         data: { AnnouncementID: a.AnnouncementID, Title: a.Title, Message: a.Message, Priority: a.Priority, Status: status },
       });
+      notifyAnnouncementsChanged();
       toast(archiving ? "Announcement archived." : "Announcement restored.");
       load();
     } catch (err) {
@@ -149,6 +151,7 @@ export default function AnnouncementsPage() {
     setList((l) => l?.filter((x) => x.AnnouncementID !== a.AnnouncementID) ?? l);
     try {
       await call("deleteAnnouncement", { announcementId: a.AnnouncementID });
+      notifyAnnouncementsChanged();
       toast("Announcement deleted.");
       if (form.AnnouncementID === a.AnnouncementID) setForm(emptyForm);
       load();

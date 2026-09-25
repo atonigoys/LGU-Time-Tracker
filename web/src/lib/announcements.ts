@@ -17,8 +17,25 @@ export interface Announcement {
   UpdatedAt: string;
 }
 
-// New announcements show up while the app is open without a manual refresh.
-const POLL_MS = 5 * 60 * 1000;
+// New announcements show up while the app is open without a manual refresh:
+// checked every minute while the tab is visible, and right away when the
+// user comes back to the tab or another tab changes announcements.
+const POLL_MS = 60 * 1000;
+const MIN_GAP_MS = 10 * 1000;
+
+// Tells other open tabs (same browser) to re-check immediately.
+const CHANNEL = "lgu-announcements";
+
+/** Call after posting, editing, archiving or deleting an announcement. */
+export function notifyAnnouncementsChanged() {
+  try {
+    const bc = new BroadcastChannel(CHANNEL);
+    bc.postMessage("changed");
+    bc.close();
+  } catch {
+    // BroadcastChannel unsupported - other tabs still pick it up on their next check.
+  }
+}
 
 const readKey = (userId: string) => `lgu_ann_read:${userId}`;
 const toastedKey = (userId: string) => `lgu_ann_toasted:${userId}`;
@@ -101,11 +118,31 @@ export function useAnnouncements(userId: string | undefined, onNew?: (items: Ann
     cachedCall<{ announcements: Announcement[] }>("getAnnouncements", {}, handle).catch(() => {
       if (!cancelled) setLoaded(true);
     });
-    const poll = () => fetchAndCache<{ announcements: Announcement[] }>("getAnnouncements", {}).then(handle).catch(() => {});
-    const id = setInterval(poll, POLL_MS);
+    let lastPoll = Date.now();
+    const poll = (force = false) => {
+      if (!force && Date.now() - lastPoll < MIN_GAP_MS) return;
+      lastPoll = Date.now();
+      fetchAndCache<{ announcements: Announcement[] }>("getAnnouncements", {}).then(handle).catch(() => {});
+    };
+    // Background tabs don't poll; they catch up as soon as they're visible again.
+    const id = setInterval(() => {
+      if (document.visibilityState === "visible") poll(true);
+    }, POLL_MS);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") poll();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
     // After a change in this tab (e.g. an admin just posted), refresh soon.
-    const onChange = () => setTimeout(poll, 400);
+    const onChange = () => setTimeout(() => poll(true), 400);
     window.addEventListener(DATA_CHANGED_EVENT, onChange);
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel(CHANNEL);
+      bc.onmessage = () => setTimeout(() => poll(true), 300);
+    } catch {
+      bc = null;
+    }
     const onRead = () => setRead(loadSet(local(), readKey(userId)));
     window.addEventListener(READ_EVENT, onRead);
     return () => {
@@ -113,6 +150,9 @@ export function useAnnouncements(userId: string | undefined, onNew?: (items: Ann
       clearInterval(id);
       window.removeEventListener(DATA_CHANGED_EVENT, onChange);
       window.removeEventListener(READ_EVENT, onRead);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+      bc?.close();
     };
   }, [userId, apply]);
 
