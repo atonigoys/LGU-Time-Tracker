@@ -11,9 +11,9 @@ import { useRequireAuth } from "@/lib/session";
 import { useToast } from "@/lib/toast";
 import { cachedCall } from "@/lib/cache";
 import { cls } from "@/lib/ui";
-import { formatDate, formatTime } from "@/lib/format";
+import { addDays, formatDate, formatTime } from "@/lib/format";
 import { buildScanUrl, downloadDataUrl, printQrCard } from "@/lib/qr";
-import type { AttendanceRecord, Employee } from "@/lib/types";
+import type { AttendanceRecord, DutyInfo, Employee } from "@/lib/types";
 
 // Same encoded data as before (buildScanUrl(token)); only the rendering is
 // sharper: drawn at 2x for crisp display, with a 2-module quiet zone.
@@ -53,6 +53,7 @@ export default function MyQrPage() {
   const toast = useToast();
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [issuedAt, setIssuedAt] = useState("");
+  const [duty, setDuty] = useState<DutyInfo | null>(null);
   const [dataUrl, setDataUrl] = useState("");
   const [records, setRecords] = useState<AttendanceRecord[] | null | undefined>(undefined);
   const [error, setError] = useState(false);
@@ -61,10 +62,11 @@ export default function MyQrPage() {
   const load = useCallback(async () => {
     setError(false);
     try {
-      await cachedCall<{ employee: Employee; qrIssuedAt?: string }>("getMyQR", {}, async (res) => {
+      await cachedCall<{ employee: Employee; qrIssuedAt?: string; duty?: DutyInfo }>("getMyQR", {}, async (res) => {
         const qr = await renderQr(res.employee.QRToken, 560);
         setEmployee(res.employee);
         setIssuedAt(res.qrIssuedAt ?? "");
+        setDuty(res.duty ?? null);
         setDataUrl(qr);
       });
     } catch (err) {
@@ -116,6 +118,7 @@ export default function MyQrPage() {
 
   const active = !employee || employee.Status === "Active";
   const ready = !!employee && !!dataUrl;
+  const onLeave = duty?.status === "On Leave";
 
   return (
     <AppShell title="My Attendance QR Code">
@@ -128,14 +131,28 @@ export default function MyQrPage() {
           <span
             role="status"
             className={`inline-flex w-fit items-center gap-2 rounded-full px-3 py-1.5 text-[12.5px] font-semibold ring-1 ring-inset ${
-              active ? "bg-green-50 text-green-800 ring-green-600/20" : "bg-gray-100 text-gray-600 ring-gray-400/30"
+              onLeave ? "bg-amber-50 text-amber-800 ring-amber-600/25" : active ? "bg-green-50 text-green-800 ring-green-600/20" : "bg-gray-100 text-gray-600 ring-gray-400/30"
             }`}
           >
-            <span className={`h-2 w-2 rounded-full ${active ? "bg-green-600" : "bg-gray-400"}`} aria-hidden />
-            {active ? "QR Code Active" : "QR Code Inactive"}
+            <span className={`h-2 w-2 rounded-full ${onLeave ? "bg-amber-500" : active ? "bg-green-600" : "bg-gray-400"}`} aria-hidden />
+            {onLeave ? "Paused while on leave" : active ? "QR Code Active" : "QR Code Inactive"}
           </span>
         )}
       </div>
+
+      {ready && onLeave && duty && (
+        <div role="status" className="mb-5 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3.5 text-[13.5px] text-amber-900">
+          <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-600" />
+          <div>
+            <div className="font-semibold">
+              You&apos;re on {duty.type ? `${duty.type} leave` : "leave"} until {formatDate(duty.to, "long")}.
+            </div>
+            <div className="mt-0.5 text-amber-800">
+              Your QR code won&apos;t record attendance during your leave. You can scan again starting {formatDate(addDays(duty.to, 1), "long")}.
+            </div>
+          </div>
+        </div>
+      )}
 
       {error && !ready ? (
         <div className="rounded-xl border border-gray-200/80 bg-white px-4 py-14 text-center">
@@ -239,8 +256,8 @@ export default function MyQrPage() {
                 QR Status
               </h3>
               <div className="mt-2 flex items-center gap-2 text-[15px] font-semibold text-gray-900">
-                <span className={`h-2.5 w-2.5 rounded-full ${active ? "bg-green-600" : "bg-gray-400"}`} aria-hidden />
-                {employee ? (active ? "Active" : employee.Status) : <Skeleton className="h-4 w-16" />}
+                <span className={`h-2.5 w-2.5 rounded-full ${active && onLeave ? "bg-amber-500" : active ? "bg-green-600" : "bg-gray-400"}`} aria-hidden />
+                {employee ? (active ? (onLeave ? "Paused (on leave)" : "Active") : employee.Status) : <Skeleton className="h-4 w-16" />}
               </div>
               <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>

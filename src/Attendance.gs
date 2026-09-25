@@ -43,7 +43,24 @@ function manualTimeAction_(token, device) {
   return recordAttendance_(emp, device || 'Web', '');
 }
 
+/**
+ * Employees on approved leave can't record attendance until it ends. Someone
+ * who already timed in before the leave was set today may still time out.
+ */
+function leaveBlocksAttendance_(emp) {
+  var dateStr = todayStrPH_();
+  var leave = findLeave_(approvedLeavesByEmp_(), emp.EmployeeID, dateStr);
+  if (!leave || dutyDisplayStatus_(leave) !== 'ON LEAVE') return null;
+  var rec = getTodayRecordForEmployee_(emp.EmployeeID, dateStr);
+  if (rec && rec.TimeIn && !rec.TimeOut) return null;
+  var type = String(leave.LeaveType || '').trim();
+  return apiError_(emp.FullName + ' is on ' + (type ? type + ' leave' : 'leave') + ' until ' + shortDate_(leave.EndDate) +
+    '. Attendance can be recorded again on ' + shortDate_(addDaysStr_(String(leave.EndDate), 1)) + '.');
+}
+
 function recordAttendance_(emp, device, ip) {
+  var blocked = leaveBlocksAttendance_(emp);
+  if (blocked) return blocked;
   // Two scans landing at the same moment (double tap, two scanner stations)
   // could otherwise both see "no record today" and write two Time Ins.
   var lock = LockService.getScriptLock();

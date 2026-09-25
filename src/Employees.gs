@@ -138,7 +138,12 @@ function getMyQR_(token) {
   var session = requireAuth_(token);
   var emp = findRow_('Employees', 'EmployeeID', session.employeeId);
   if (!emp) return apiError_('Employee not found.');
-  return apiOk_({ employee: sanitizeEmployee_(emp), qrIssuedAt: qrIssuedAt_(emp) });
+  return apiOk_({
+    employee: sanitizeEmployee_(emp),
+    qrIssuedAt: qrIssuedAt_(emp),
+    // Scans are refused while on leave; the page says so.
+    duty: dutyInfo_(approvedLeavesByEmp_(), emp.EmployeeID, todayStrPH_())
+  });
 }
 
 /**
