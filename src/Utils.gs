@@ -201,6 +201,13 @@ function combineDateAndTime_(dateStr, timeValue) {
   return new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]), t.h, t.m, 0);
 }
 
+/** "yyyy-MM-dd" shifted by n days (calendar math in the script timezone). */
+function addDaysStr_(dateStr, n) {
+  var d = combineDateAndTime_(dateStr, '00:00');
+  d.setDate(d.getDate() + n);
+  return formatDatePH_(d, 'yyyy-MM-dd');
+}
+
 function isValidDate_(d) {
   return d instanceof Date && !isNaN(d.getTime());
 }

@@ -174,9 +174,13 @@ export function cachedCall<T>(
       return entry.data;
     });
   }
-  if (cached !== undefined) {
+  // Entries marked stale by a change on the server aren't shown at all:
+  // redrawing them would briefly undo what the user just changed (e.g. an
+  // employee flipping back to "On Leave" right after being set On Duty).
+  const showCached = cached !== undefined && !entry?.stale;
+  if (showCached) {
     // Deliver asynchronously so callers can safely set state from effects.
-    Promise.resolve().then(() => onData(cached, true));
+    Promise.resolve().then(() => onData(cached as T, true));
     setRefreshing(1);
   }
   return fetchAndCache<T>(action, payload)
@@ -185,6 +189,6 @@ export function cachedCall<T>(
       return fresh;
     })
     .finally(() => {
-      if (cached !== undefined) setRefreshing(-1);
+      if (showCached) setRefreshing(-1);
     });
 }

@@ -55,6 +55,8 @@ const STATUS_OPTIONS = [
   { value: "INCOMPLETE", label: "Incomplete" },
   { value: "ON LEAVE", label: "On Leave" },
   { value: "HOLIDAY", label: "Holiday" },
+  { value: "DAY OFF", label: "Day Off" },
+  { value: "OFFICIAL BUSINESS", label: "Official Business" },
 ];
 
 const PAGE_SIZES = [10, 25, 50, 100];
@@ -117,7 +119,8 @@ function sortValue(r: AttendanceRecord, key: SortKey): string | number {
 }
 
 function isAttended(status: string) {
-  return status === "PRESENT" || status === "LATE" || status === "INCOMPLETE";
+  // Official business is work done outside the office, so it counts as present.
+  return status === "PRESENT" || status === "LATE" || status === "INCOMPLETE" || status === "OFFICIAL BUSINESS";
 }
 
 function pageList(current: number, total: number): Array<number | "…"> {

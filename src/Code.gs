@@ -103,6 +103,7 @@ function routeAction_(action, p, e) {
     case 'getMyQR': return getMyQR_(p.token);
     case 'registerAccount': return registerAccount_(p.data || {}, ip);
     case 'approveEmployee': return approveEmployee_(p.token, p.employeeId);
+    case 'setDutyStatus': return setDutyStatus_(p.token, p.data || {});
     case 'rejectEmployee': return rejectEmployee_(p.token, p.employeeId);
     case 'getActiveDepartments': return getActiveDepartments_();
     case 'uploadProfilePhoto': return uploadProfilePhoto_(p.token, p.imageBase64, p.mimeType);

@@ -5,7 +5,13 @@
 
 function getEmployees_(token) {
   requireAuth_(token, ['Admin', 'HR']);
-  var rows = sheetToObjects_('Employees').map(sanitizeEmployee_);
+  var byEmp = approvedLeavesByEmp_();
+  var today = todayStrPH_();
+  var rows = sheetToObjects_('Employees').map(function (e) {
+    var out = sanitizeEmployee_(e);
+    out.Duty = dutyInfo_(byEmp, e.EmployeeID, today);
+    return out;
+  });
   return apiOk_({ employees: rows });
 }
 

@@ -240,7 +240,7 @@ function computeHours_(dateStr, timeIn, timeOut, schedule) {
  */
 function resolveStatus_(hasTimeIn, hasTimeOut, lateMinutes, dateStr, todayStr, holidayName, leave) {
   if (holidayName) return 'HOLIDAY';
-  if (leave) return 'ON LEAVE';
+  if (leave) return dutyDisplayStatus_(leave);
   if (!hasTimeIn) return 'ABSENT';
   if (!hasTimeOut && dateStr < todayStr) return 'INCOMPLETE';
   return Number(lateMinutes) > 0 ? 'LATE' : 'PRESENT';
@@ -279,8 +279,8 @@ function toAttendanceView_(rec, emp, ctx) {
   var holidayName = ctx.holidays[dateStr] || '';
   var leave = findLeave_(ctx.leavesByEmp, rec.EmployeeID, dateStr);
   out.Status = resolveStatus_(!!out.TimeIn, !!out.TimeOut, out.LateMinutes, dateStr, ctx.today, holidayName, leave);
-  // Nobody is "late" on a holiday or approved leave.
-  if (out.Status === 'HOLIDAY' || out.Status === 'ON LEAVE') out.LateMinutes = 0;
+  // Nobody is "late" on a holiday, leave, day off or official business.
+  if (out.Status === 'HOLIDAY' || out.Status === 'ON LEAVE' || out.Status === 'DAY OFF' || out.Status === 'OFFICIAL BUSINESS') out.LateMinutes = 0;
   out.HolidayName = holidayName;
   out.LeaveType = leave ? leave.LeaveType : '';
   out.Source = rec.Device || '';
@@ -366,7 +366,7 @@ function getAttendance_(token, filters) {
           if (created && day.str < created) return;   // not yet employed
           if (recorded[e.EmployeeID + '|' + day.str]) return;
           var leave = findLeave_(ctx.leavesByEmp, e.EmployeeID, day.str);
-          var status = ctx.holidays[day.str] ? 'HOLIDAY' : (leave ? 'ON LEAVE' : 'ABSENT');
+          var status = ctx.holidays[day.str] ? 'HOLIDAY' : (leave ? dutyDisplayStatus_(leave) : 'ABSENT');
           out.push(derivedAttendanceView_(e, day.str, status, ctx, leave));
         });
       });
@@ -569,6 +569,7 @@ function getMyTodayStatus_(token) {
   var rec = getTodayRecordForEmployee_(session.employeeId, dateStr);
   return apiOk_({
     today: rec ? formatAttendanceRecord_(rec) : null,
+    duty: dutyInfo_(approvedLeavesByEmp_(), session.employeeId, dateStr),
     serverDate: formatDatePH_(nowPH_(), 'MMMM d, yyyy'),
     serverTime: formatDatePH_(nowPH_(), 'hh:mm:ss a')
   });

@@ -26,9 +26,22 @@ export interface Employee {
   QRToken: string;
   PhotoURL: string;
   DateCreated: string;
+  /** Current duty status (from getEmployees) */
+  Duty?: DutyInfo;
 }
 
-export type AttendanceStatus = "PRESENT" | "LATE" | "ABSENT" | "INCOMPLETE" | "ON LEAVE" | "HOLIDAY";
+export type DutyStatus = "On Duty" | "On Leave" | "Day Off" | "Official Business";
+
+export interface DutyInfo {
+  status: DutyStatus;
+  /** Leave type when On Leave, e.g. "Vacation" */
+  type: string;
+  from: string;
+  to: string;
+  note: string;
+}
+
+export type AttendanceStatus = "PRESENT" | "LATE" | "ABSENT" | "INCOMPLETE" | "ON LEAVE" | "HOLIDAY" | "DAY OFF" | "OFFICIAL BUSINESS";
 
 export interface AttendanceRecord {
   AttendanceID: string;

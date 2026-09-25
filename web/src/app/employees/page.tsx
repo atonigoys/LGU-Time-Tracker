@@ -7,6 +7,8 @@ import { AppShell } from "@/components/AppShell";
 import { StatusPill } from "@/components/Badge";
 import { SkeletonTableRows } from "@/components/Skeleton";
 import { Select } from "@/components/Select";
+import { DutyBadge, DutyStatusDialog } from "@/components/DutyStatusDialog";
+import { formatDate } from "@/lib/format";
 import { drivePhotoUrl } from "@/components/Avatar";
 import { useRequireAuth } from "@/lib/session";
 import { useToast } from "@/lib/toast";
@@ -40,6 +42,7 @@ export default function EmployeesPage() {
   const [qrDataUrl, setQrDataUrl] = useState("");
 
   const [tempPassword, setTempPassword] = useState<string | null>(null);
+  const [dutyFor, setDutyFor] = useState<Employee | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -302,15 +305,16 @@ export default function EmployeesPage() {
                 <th className={cls.th}>Position</th>
                 <th className={cls.th}>Role</th>
                 <th className={cls.th}>Status</th>
+                <th className={cls.th}>Duty</th>
                 <th className={cls.th}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <SkeletonTableRows cols={6} />
+                <SkeletonTableRows cols={7} />
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className={cls.emptyState}>
+                  <td colSpan={7} className={cls.emptyState}>
                     No employees match your filters.
                   </td>
                 </tr>
@@ -328,6 +332,18 @@ export default function EmployeesPage() {
                     <td className={cls.td}>{e.Role}</td>
                     <td className={cls.td}>
                       <StatusPill status={e.Status} />
+                    </td>
+                    <td className={cls.td}>
+                      {e.Role === "Admin" || e.Status !== "Active" ? (
+                        <span className="text-gray-400">—</span>
+                      ) : (
+                        <div>
+                          <DutyBadge duty={e.Duty} />
+                          {e.Duty && e.Duty.status !== "On Duty" && e.Duty.to && (
+                            <div className="mt-0.5 text-[11px] text-gray-500">until {formatDate(e.Duty.to)}</div>
+                          )}
+                        </div>
+                      )}
                     </td>
                     <td className={cls.td}>
                       {e.Status === "Pending" ? (
@@ -350,6 +366,11 @@ export default function EmployeesPage() {
                               QR
                             </button>
                           )}
+                          {e.Role !== "Admin" && e.Status === "Active" && (
+                            <button onClick={() => setDutyFor(e)} className={`${cls.btnSecondary} ${cls.btnSmall}`}>
+                              Set Status
+                            </button>
+                          )}
                           <button onClick={() => resetPassword(e)} className={`${cls.btnSecondary} ${cls.btnSmall}`}>
                             Reset PW
                           </button>
@@ -369,6 +390,17 @@ export default function EmployeesPage() {
           </table>
         </div>
       </div>
+
+      <DutyStatusDialog
+        employee={dutyFor}
+        onClose={() => setDutyFor(null)}
+        onSaved={(id, duty, message) => {
+          setEmployees((prev) => prev.map((x) => (x.EmployeeID === id ? { ...x, Duty: duty } : x)));
+          setDutyFor(null);
+          toast(message);
+          load();
+        }}
+      />
 
       {showForm && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/45 p-4">

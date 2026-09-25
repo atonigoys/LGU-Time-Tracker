@@ -5,6 +5,8 @@ const STATUS_STYLES: Record<string, string> = {
   INCOMPLETE: "bg-orange-50 text-orange-800 ring-orange-600/20",
   "ON LEAVE": "bg-sky-50 text-sky-800 ring-sky-600/20",
   HOLIDAY: "bg-violet-50 text-violet-800 ring-violet-600/20",
+  "DAY OFF": "bg-gray-100 text-gray-700 ring-gray-500/20",
+  "OFFICIAL BUSINESS": "bg-teal-50 text-teal-800 ring-teal-600/20",
 };
 
 export function StatusBadge({ status }: { status?: string }) {

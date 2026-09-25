@@ -68,6 +68,7 @@ const ACTIONS: Record<string, { label: string; category: AuditCategory }> = {
   CREATE_ANNOUNCEMENT: { label: "Posted announcement", category: "config" },
   UPDATE_ANNOUNCEMENT: { label: "Edited announcement", category: "config" },
   DELETE_ANNOUNCEMENT: { label: "Deleted announcement", category: "config" },
+  SET_DUTY_STATUS: { label: "Changed duty status", category: "employee" },
   RESET_ALL_ACCOUNTS: { label: "Reset all accounts", category: "system" },
   REMOVE_DEMO_ACCOUNTS: { label: "Removed demo accounts", category: "system" },
 };
@@ -220,6 +221,12 @@ export function summarize(e: AuditEntry): string {
       return `“${String(n.Title ?? "")}”${n.Priority === "Important" ? " · Important" : ""}`;
     case "DELETE_ANNOUNCEMENT":
       return `Deleted “${String(o.Title ?? "")}”`;
+    case "SET_DUTY_STATUS": {
+      const st = String(n.Status ?? "");
+      if (st === "On Duty") return `Back on duty${o.Status ? ` (was ${String(o.Status)})` : ""}`;
+      const range = n.From ? (n.From === n.To ? formatDate(String(n.From)) : `${formatDate(String(n.From))} – ${formatDate(String(n.To))}`) : "";
+      return [`${st}${n.Type ? ` (${String(n.Type)})` : ""}`, range, n.Note && `“${String(n.Note)}”`].filter(Boolean).join(" · ");
+    }
     case "RESET_ALL_ACCOUNTS":
       return `Deleted ${n.Employees ?? 0} account(s), ${n.Attendance ?? 0} attendance and ${n.Leave ?? 0} leave record(s)`;
     case "REMOVE_DEMO_ACCOUNTS":
