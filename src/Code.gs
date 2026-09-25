@@ -143,6 +143,11 @@ function routeAction_(action, p, e) {
     case 'getAuditLogs': return getAuditLogs_(p.token);
 
     // --- Settings ---
+    // --- Announcements ---
+    case 'getAnnouncements': return getAnnouncements_(p.token, p.includeArchived);
+    case 'saveAnnouncement': return saveAnnouncement_(p.token, p.data || {});
+    case 'deleteAnnouncement': return deleteAnnouncement_(p.token, p.announcementId);
+
     case 'getSettings': return getSettings_(p.token);
     case 'saveSetting': return saveSetting_(p.token, p.key, p.value);
 

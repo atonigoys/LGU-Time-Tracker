@@ -9,6 +9,9 @@ import * as Tooltip from "@radix-ui/react-tooltip";
 import { ArrowLeftRight, Bell, ChevronDown, Loader2, LogOut, PanelLeftClose, PanelLeftOpen, Settings, UserCircle } from "lucide-react";
 import { useSession } from "@/lib/session";
 import { useNotifications } from "@/lib/notifications";
+import { useAnnouncements, type Announcement } from "@/lib/announcements";
+import { useToast } from "@/lib/toast";
+import { AnnouncementDialog, PriorityBadge, postedAt } from "@/components/AnnouncementDialog";
 import { LogoutDialog } from "@/components/LogoutDialog";
 import { useBackgroundRefreshing } from "@/lib/cache";
 import { warmPages } from "@/lib/prefetch";
@@ -47,8 +50,24 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const notifications = useNotifications(session?.user.role);
+  const toast = useToast();
+  const [openAnnouncement, setOpenAnnouncement] = useState<Announcement | null>(null);
+  const ann = useAnnouncements(session?.user.employeeId, (fresh) => {
+    toast(fresh.length === 1 ? `New announcement: ${fresh[0].Title}` : `You have ${fresh.length} new announcements.`);
+  });
+  const bellCount = notifications.length + ann.unreadCount;
+
+  function showAnnouncement(a: Announcement | null) {
+    setOpenAnnouncement(a);
+  }
   const [logoutOpen, setLogoutOpen] = useState(false);
   const refreshing = useBackgroundRefreshing();
+
+  // Opening an announcement marks it read.
+  useEffect(() => {
+    if (openAnnouncement) ann.markRead(openAnnouncement.AnnouncementID);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openAnnouncement]);
 
   const role0 = session?.user.role;
   const userId0 = session?.user.employeeId;
@@ -220,33 +239,84 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
             <div className="flex items-center gap-1.5 sm:gap-2.5">
               <DropdownMenu.Root>
                 <DropdownMenu.Trigger
-                  aria-label={notifications.length ? `Notifications (${notifications.length} new)` : "Notifications"}
+                  aria-label={bellCount ? `Notifications (${bellCount} new)` : "Notifications"}
                   className="relative flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-green-900 focus-visible:ring-2 focus-visible:ring-green-600 focus-visible:outline-none"
                 >
                   <Bell size={18} />
-                  {notifications.length > 0 && (
-                    <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />
+                  {bellCount > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-600 px-1 text-[10.5px] leading-none font-bold text-white ring-2 ring-white tabular-nums">
+                      {bellCount > 9 ? "9+" : bellCount}
+                    </span>
                   )}
                 </DropdownMenu.Trigger>
                 <DropdownMenu.Portal>
-                  <DropdownMenu.Content align="end" sideOffset={8} className={`${menuContentCls} w-[300px]`}>
-                    <div className="px-2.5 pt-1.5 pb-2 text-[12px] font-bold tracking-wide text-gray-500 uppercase">
-                      Notifications
+                  <DropdownMenu.Content align="end" sideOffset={8} className={`${menuContentCls} w-[340px] max-w-[calc(100vw-24px)]`}>
+                    <div className="flex items-center justify-between px-2.5 pt-1.5 pb-2">
+                      <span className="text-[12px] font-bold tracking-wide text-gray-500 uppercase">Notifications</span>
+                      {ann.unreadCount > 0 && (
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            ann.markAllRead();
+                          }}
+                          className="rounded px-1 text-[12px] font-semibold text-green-700 hover:underline focus-visible:ring-2 focus-visible:ring-green-600 focus-visible:outline-none"
+                        >
+                          Mark all as read
+                        </button>
+                      )}
                     </div>
-                    {notifications.length === 0 ? (
-                      <div className="px-2.5 pb-3 text-[13px] text-gray-500">You&apos;re all caught up.</div>
+
+                    {notifications.map((n) => (
+                      <DropdownMenu.Item key={n.id} asChild className={`${menuItemCls} items-start`}>
+                        <Link href={n.href}>
+                          <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-amber-500" />
+                          <span>
+                            <span className="block font-semibold text-gray-900">{n.title}</span>
+                            <span className="block text-[12px] text-gray-500">{n.detail}</span>
+                          </span>
+                        </Link>
+                      </DropdownMenu.Item>
+                    ))}
+                    {notifications.length > 0 && <DropdownMenu.Separator className="my-1 h-px bg-gray-100" />}
+
+                    <div className="px-2.5 pt-1 pb-1 text-[11px] font-semibold tracking-wide text-gray-400 uppercase">Announcements</div>
+                    {ann.announcements.length === 0 ? (
+                      <div className="px-2.5 pb-3 text-[13px] text-gray-500">No announcements at this time.</div>
                     ) : (
-                      notifications.map((n) => (
-                        <DropdownMenu.Item key={n.id} asChild className={`${menuItemCls} items-start`}>
-                          <Link href={n.href}>
-                            <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-amber-500" />
-                            <span>
-                              <span className="block font-semibold text-gray-900">{n.title}</span>
-                              <span className="block text-[12px] text-gray-500">{n.detail}</span>
-                            </span>
-                          </Link>
+                      <div className="max-h-[360px] overflow-y-auto">
+                        {ann.announcements.map((a) => {
+                          const unread = ann.isUnread(a.AnnouncementID);
+                          return (
+                            <DropdownMenu.Item
+                              key={a.AnnouncementID}
+                              onSelect={() => setOpenAnnouncement(a)}
+                              className={`${menuItemCls} items-start`}
+                            >
+                              <span
+                                aria-hidden
+                                className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${unread ? (a.Priority === "Important" ? "bg-amber-500" : "bg-green-600") : "bg-transparent"}`}
+                              />
+                              <span className="min-w-0 flex-1">
+                                <span className="flex items-center gap-1.5">
+                                  <span className={`truncate ${unread ? "font-semibold text-gray-900" : "text-gray-700"}`}>{a.Title}</span>
+                                  <PriorityBadge priority={a.Priority} />
+                                </span>
+                                <span className="line-clamp-2 block text-[12px] text-gray-500">{a.Message}</span>
+                                <span className="block text-[11px] text-gray-400">{postedAt(a.CreatedAt)}</span>
+                              </span>
+                              {unread && <span className="sr-only">(unread)</span>}
+                            </DropdownMenu.Item>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {(role === "Admin" || role === "HR") && (
+                      <>
+                        <DropdownMenu.Separator className="my-1 h-px bg-gray-100" />
+                        <DropdownMenu.Item asChild className={`${menuItemCls} justify-center font-semibold text-green-800`}>
+                          <Link href="/announcements">Manage announcements</Link>
                         </DropdownMenu.Item>
-                      ))
+                      </>
                     )}
                   </DropdownMenu.Content>
                 </DropdownMenu.Portal>
@@ -304,6 +374,8 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
 
           <div className="flex-1 px-4 pt-5 pb-24 md:px-6 md:pb-8">{children}</div>
         </main>
+
+        <AnnouncementDialog announcement={openAnnouncement} onClose={() => showAnnouncement(null)} />
 
         <LogoutDialog
           open={logoutOpen}

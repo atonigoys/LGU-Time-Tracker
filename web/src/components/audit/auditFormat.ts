@@ -65,6 +65,9 @@ const ACTIONS: Record<string, { label: string; category: AuditCategory }> = {
   UPDATE_DEPARTMENT: { label: "Updated department", category: "config" },
   REQUEST_LEAVE: { label: "Requested leave", category: "employee" },
   UPDATE_LEAVE_STATUS: { label: "Reviewed leave", category: "employee" },
+  CREATE_ANNOUNCEMENT: { label: "Posted announcement", category: "config" },
+  UPDATE_ANNOUNCEMENT: { label: "Edited announcement", category: "config" },
+  DELETE_ANNOUNCEMENT: { label: "Deleted announcement", category: "config" },
   RESET_ALL_ACCOUNTS: { label: "Reset all accounts", category: "system" },
   REMOVE_DEMO_ACCOUNTS: { label: "Removed demo accounts", category: "system" },
 };
@@ -213,6 +216,10 @@ export function summarize(e: AuditEntry): string {
       return [n.LeaveType, n.StartDate && `${formatDate(String(n.StartDate))}${n.EndDate && n.EndDate !== n.StartDate ? ` – ${formatDate(String(n.EndDate))}` : ""}`]
         .filter(Boolean)
         .join(" · ");
+    case "CREATE_ANNOUNCEMENT":
+      return `“${String(n.Title ?? "")}”${n.Priority === "Important" ? " · Important" : ""}`;
+    case "DELETE_ANNOUNCEMENT":
+      return `Deleted “${String(o.Title ?? "")}”`;
     case "RESET_ALL_ACCOUNTS":
       return `Deleted ${n.Employees ?? 0} account(s), ${n.Attendance ?? 0} attendance and ${n.Leave ?? 0} leave record(s)`;
     case "REMOVE_DEMO_ACCOUNTS":

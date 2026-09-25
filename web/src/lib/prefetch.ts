@@ -49,6 +49,7 @@ function pageRequests(role: Role): Array<[string, Record<string, unknown>]> {
     ["getHolidays", {}],
     ["getReport", { type: "daily", filters: { ...reportsDefaultRange(), department: "", employeeId: "" } }],
   ];
+  reqs.push(["getAnnouncements", { includeArchived: true }]);
   if (role === "Admin") reqs.push(["getSchedules", {}], ["getAuditLogs", {}]);
   return reqs;
 }

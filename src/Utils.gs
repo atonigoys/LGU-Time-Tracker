@@ -14,7 +14,8 @@ var SHEET_HEADERS = {
   Holidays: ['HolidayID', 'Date', 'HolidayName', 'Type', 'Status'],
   Leave: ['LeaveID', 'EmployeeID', 'StartDate', 'EndDate', 'LeaveType', 'Reason', 'Status', 'ApprovedBy'],
   AuditLogs: ['LogID', 'UserID', 'Action', 'Target', 'OldValue', 'NewValue', 'Timestamp'],
-  Settings: ['Key', 'Value', 'Description']
+  Settings: ['Key', 'Value', 'Description'],
+  Announcements: ['AnnouncementID', 'Title', 'Message', 'Priority', 'Status', 'CreatedBy', 'CreatedAt', 'UpdatedAt']
 };
 
 var cachedDatabase_ = null;
