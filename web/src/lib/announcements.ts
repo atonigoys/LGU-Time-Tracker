@@ -67,6 +67,15 @@ export function useAnnouncements(userId: string | undefined, onNew?: (items: Ann
       if (!userId) return;
       setItems(list);
       const readSet = loadSet(local(), readKey(userId));
+      // Your own announcements count as read - no notice for what you just posted.
+      let added = false;
+      list.forEach((a) => {
+        if (a.CreatedBy === userId && !readSet.has(a.AnnouncementID)) {
+          readSet.add(a.AnnouncementID);
+          added = true;
+        }
+      });
+      if (added) saveSet(local(), readKey(userId), readSet);
       setRead(readSet);
       // Only the hook that shows notices (the header) records what it announced.
       if (!onNewRef.current) return;
