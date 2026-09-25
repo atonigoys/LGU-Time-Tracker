@@ -10,7 +10,7 @@ import { useRequireAuth } from "@/lib/session";
 import { useToast } from "@/lib/toast";
 import { useConfirm } from "@/lib/confirm";
 import { call } from "@/lib/api";
-import { cachedCall } from "@/lib/cache";
+import { cachedCall, useLiveRefresh } from "@/lib/cache";
 import { markLeaveDecisionsSeen } from "@/lib/notifications";
 import { cls } from "@/lib/ui";
 import { addDays, formatDate, formatTime, manilaToday } from "@/lib/format";
@@ -67,6 +67,8 @@ export default function MyLeavePage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- state is only set after the request resolves
     load();
   }, [session, load]);
+
+  useLiveRefresh(load, 60_000, !!session);
 
   async function submit(ev: FormEvent) {
     ev.preventDefault();

@@ -9,7 +9,7 @@ import { LeaveStatusBadge } from "@/components/LeaveStatusBadge";
 import { useRequireAuth } from "@/lib/session";
 import { useToast } from "@/lib/toast";
 import { call } from "@/lib/api";
-import { cachedCall } from "@/lib/cache";
+import { cachedCall, useLiveRefresh } from "@/lib/cache";
 import { cls } from "@/lib/ui";
 import { formatDate, formatTime } from "@/lib/format";
 import type { LeaveRequest, LeaveStatus } from "@/lib/types";
@@ -61,6 +61,8 @@ export default function LeaveRequestsPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- state is only set after the request resolves
     load();
   }, [session, load]);
+
+  useLiveRefresh(load, 60_000, !!session);
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { Pending: 0, Approved: 0, Rejected: 0, All: 0 };

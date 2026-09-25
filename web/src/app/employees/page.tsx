@@ -14,7 +14,7 @@ import { useRequireAuth } from "@/lib/session";
 import { useToast } from "@/lib/toast";
 import { useConfirm } from "@/lib/confirm";
 import { call } from "@/lib/api";
-import { cachedCall } from "@/lib/cache";
+import { cachedCall, useLiveRefresh } from "@/lib/cache";
 import { cls } from "@/lib/ui";
 import { buildScanUrl, downloadDataUrl, printQrCard } from "@/lib/qr";
 import type { Department, Employee, Role } from "@/lib/types";
@@ -68,6 +68,8 @@ export default function EmployeesPage() {
       if (q) setSearch(q);
     });
   }, [session, load]);
+
+  useLiveRefresh(load, 30_000, !!session);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();

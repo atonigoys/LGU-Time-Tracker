@@ -1,6 +1,6 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import { call } from "./api";
 import { DATA_CHANGED_EVENT } from "./events";
 import { getSession } from "./storage";
@@ -168,6 +168,18 @@ export function cachedCall<T>(
 ): Promise<T> {
   const entry = readEntry<T>(cacheKey(action, payload));
   const cached = entry?.data;
+  if (backgroundRefresh) {
+    // Auto-refresh of data already on screen: fetch quietly, no "Updating…".
+    // A failed auto-refresh never settles, so pages don't show an error (or a
+    // toast every interval) over data that's still on screen.
+    return fetchAndCache<T>(action, payload).then(
+      (fresh) => {
+        onData(fresh, false);
+        return fresh;
+      },
+      () => new Promise<T>(() => {})
+    );
+  }
   // revalidate: data another person changes (e.g. a leave decision) - always
   // confirm with the server, still showing the cached copy meanwhile.
   if (!opts.revalidate && entry && !entry.stale && Date.now() - entry.at < FRESH_MS) {
@@ -194,4 +206,51 @@ export function cachedCall<T>(
     .finally(() => {
       if (showCached) setRefreshing(-1);
     });
+}
+
+// --- Auto-refresh: pages re-check the server while open, so changes made
+// elsewhere (another admin, a scan, or an edit made straight in the Google
+// Sheet) show up without switching pages or reloading.
+let backgroundRefresh = false;
+
+/** Runs refresh() with its cachedCall()s going straight to the server, quietly. */
+function refreshInBackground(refresh: () => unknown) {
+  backgroundRefresh = true;
+  try {
+    const out = refresh();
+    if (out instanceof Promise) out.catch(() => {});
+  } finally {
+    backgroundRefresh = false;
+  }
+}
+
+/**
+ * Calls refresh every intervalMs while the tab is visible, and right away when
+ * the user comes back to the tab. refresh should be the page's own loader
+ * (which uses cachedCall); failures are ignored - the data on screen stays.
+ */
+export function useLiveRefresh(refresh: () => unknown, intervalMs: number, enabled = true) {
+  const ref = useRef(refresh);
+  useEffect(() => {
+    ref.current = refresh;
+  });
+  useEffect(() => {
+    if (!enabled) return;
+    let last = Date.now();
+    const run = (minGap: number) => {
+      if (document.visibilityState !== "visible" || Date.now() - last < minGap) return;
+      last = Date.now();
+      refreshInBackground(() => ref.current());
+    };
+    const id = setInterval(() => run(intervalMs - 1000), intervalMs);
+    // Coming back to the tab: refresh unless we just did.
+    const onReturn = () => run(5000);
+    document.addEventListener("visibilitychange", onReturn);
+    window.addEventListener("focus", onReturn);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onReturn);
+      window.removeEventListener("focus", onReturn);
+    };
+  }, [intervalMs, enabled]);
 }

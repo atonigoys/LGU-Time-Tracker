@@ -6,7 +6,7 @@ import { AppShell } from "@/components/AppShell";
 import { StatusBadge } from "@/components/Badge";
 import { useRequireAuth } from "@/lib/session";
 import { useToast } from "@/lib/toast";
-import { cachedCall } from "@/lib/cache";
+import { cachedCall, useLiveRefresh } from "@/lib/cache";
 import { cls } from "@/lib/ui";
 import type { AttendanceRecord, DutyInfo } from "@/lib/types";
 import { DutyBadge } from "@/components/DutyStatusDialog";
@@ -24,7 +24,7 @@ export default function EmployeeDashboardPage() {
   const [history, setHistory] = useState<AttendanceRecord[]>([]);
   const [offsetMs, setOffsetMs] = useState(0);
 
-  useEffect(() => {
+  const load = () => {
     if (!session) return;
     const firstName = session.user.fullName.split(" ")[0];
 
@@ -41,8 +41,14 @@ export default function EmployeeDashboardPage() {
       }).catch((err) => toast(err instanceof Error ? err.message : "Failed to load status.", true));
 
     cachedCall<{ attendance: AttendanceRecord[] }>("getMyAttendance", {}, (res) => setHistory(res.attendance.slice(0, 7))).catch(() => {});
+  };
+
+  useEffect(() => {
+    load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);
+
+  useLiveRefresh(load, 60_000, !!session);
 
   useEffect(() => {
     const tick = () => {

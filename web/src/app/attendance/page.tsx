@@ -41,7 +41,7 @@ import { useRequireAuth } from "@/lib/session";
 import { useToast } from "@/lib/toast";
 import { useConfirm } from "@/lib/confirm";
 import { call } from "@/lib/api";
-import { cachedCall } from "@/lib/cache";
+import { cachedCall, useLiveRefresh } from "@/lib/cache";
 import { attendanceDefaultFilters } from "@/lib/prefetch";
 import { cls } from "@/lib/ui";
 import { formatDate, formatHours, formatTime, manilaToday, toNumber, weekdayShort } from "@/lib/format";
@@ -195,6 +195,8 @@ export default function AttendancePage() {
       setLoading(false);
     }
   }, []);
+
+  useLiveRefresh(() => fetchAttendance(applied), 30_000, !!session);
 
   const load = useCallback(
     (filters: AppliedFilters) => {

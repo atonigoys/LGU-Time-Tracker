@@ -5,7 +5,7 @@ import { AppShell } from "@/components/AppShell";
 import { StatusBadge } from "@/components/Badge";
 import { useRequireAuth } from "@/lib/session";
 import { useToast } from "@/lib/toast";
-import { cachedCall } from "@/lib/cache";
+import { cachedCall, useLiveRefresh } from "@/lib/cache";
 import { cls } from "@/lib/ui";
 import { myAttendanceDefaultRange } from "@/lib/prefetch";
 import type { AttendanceRecord } from "@/lib/types";
@@ -30,6 +30,8 @@ export default function MyAttendancePage() {
     if (session) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);
+
+  useLiveRefresh(load, 60_000, !!session);
 
   if (!session) return null;
 

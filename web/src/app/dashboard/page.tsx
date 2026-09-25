@@ -11,7 +11,7 @@ import { WeeklyAttendanceChart, type WeeklyPoint } from "@/components/charts/Wee
 import { DepartmentChart, type DepartmentPoint } from "@/components/charts/DepartmentChart";
 import { useRequireAuth } from "@/lib/session";
 import { useToast } from "@/lib/toast";
-import { cachedCall } from "@/lib/cache";
+import { cachedCall, useLiveRefresh } from "@/lib/cache";
 import { weeklyReportPayload } from "@/lib/prefetch";
 import { addDays } from "@/lib/format";
 import { cls } from "@/lib/ui";
@@ -83,6 +83,11 @@ export default function DashboardPage() {
     loadCharts();
     cachedCall<{ departments: Department[] }>("getDepartments", {}, (res) => setDepartments(res.departments)).catch(() => {});
   }, [session, loadStats, loadCharts]);
+
+  useLiveRefresh(() => {
+    loadStats();
+    loadCharts();
+  }, 30_000, !!session);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
