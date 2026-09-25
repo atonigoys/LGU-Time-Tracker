@@ -117,7 +117,11 @@ function requestLeave_(token, data) {
   };
   appendRow_('Leave', record);
   logAudit_(emp.EmployeeID, 'REQUEST_LEAVE', record.LeaveID, '', { LeaveType: type, StartDate: from, EndDate: to, Reason: reason });
-  return apiOk_({ id: record.LeaveID });
+  // The saved request is returned so the page can show it without re-reading the list.
+  var names = {}, depts = {};
+  names[emp.EmployeeID] = emp.FullName;
+  depts[emp.EmployeeID] = emp.Department;
+  return apiOk_({ id: record.LeaveID, leave: leaveView_(record, names, depts) });
 }
 
 /** Employee withdraws their own request while it's still pending. */

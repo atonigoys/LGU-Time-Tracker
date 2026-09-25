@@ -44,8 +44,8 @@ export default function MyLeavePage() {
   const [to, setTo] = useState(today);
   const [reason, setReason] = useState("");
   const [formError, setFormError] = useState("");
-  const [saving, setSaving] = useState(false);
   const [cancelling, setCancelling] = useState<string | null>(null);
+  const [sending, setSending] = useState<Set<string>>(() => new Set());
 
   const userId = session?.user.employeeId;
   const load = useCallback(async () => {
@@ -70,11 +70,16 @@ export default function MyLeavePage() {
 
   async function submit(ev: FormEvent) {
     ev.preventDefault();
-    if (saving) return;
     setFormError("");
     if (!from || !to) return setFormError("Please choose the start and end dates.");
     if (to < from) return setFormError("The end date must be on or after the start date.");
     if (!reason.trim()) return setFormError("Please enter a reason.");
+    const clash = leaves?.find((l) => (l.Status === "Pending" || l.Status === "Approved") && !(l.EndDate < from || l.StartDate > to));
+    if (clash) {
+      return setFormError(
+        `You already have a ${clash.Status.toLowerCase()} leave covering ${range(clash.StartDate, clash.EndDate)}.`
+      );
+    }
     const days = dayCount(from, to);
     const ok = await confirm({
       title: "Submit this leave request?",
@@ -91,18 +96,53 @@ export default function MyLeavePage() {
       confirmLabel: "Yes, submit",
     });
     if (!ok) return;
-    setSaving(true);
+    // Show the request right away; the server confirms it in the background.
+    const draft = { type, from, to, reason: reason.trim() };
+    const tempId = `pending-${Date.now()}`;
+    const optimistic: LeaveRequest = {
+      LeaveID: tempId,
+      EmployeeID: userId ?? "",
+      EmployeeName: session?.user.fullName ?? "",
+      Department: "",
+      LeaveType: draft.type,
+      StartDate: draft.from,
+      EndDate: draft.to,
+      Days: days,
+      Reason: draft.reason,
+      Status: "Pending",
+      Source: "Employee",
+      FiledAt: "",
+      ReviewedBy: "",
+      ReviewedByName: "",
+      ReviewedAt: "",
+      Remarks: "",
+    };
+    setLeaves((prev) => [optimistic, ...(prev ?? [])]);
+    setSending((s) => new Set(s).add(tempId));
+    setReason("");
+    setFrom(today);
+    setTo(today);
     try {
-      await call("requestLeave", { data: { LeaveType: type, StartDate: from, EndDate: to, Reason: reason.trim() } });
+      const res = await call<{ leave?: LeaveRequest }>("requestLeave", {
+        data: { LeaveType: draft.type, StartDate: draft.from, EndDate: draft.to, Reason: draft.reason },
+      });
+      if (res.leave) setLeaves((prev) => prev?.map((x) => (x.LeaveID === tempId ? res.leave! : x)) ?? prev);
+      else load();
       toast("Leave request submitted. HR will review it.");
-      setReason("");
-      setFrom(today);
-      setTo(today);
-      load();
     } catch (err) {
+      // Put everything back so nothing typed is lost.
+      setLeaves((prev) => prev?.filter((x) => x.LeaveID !== tempId) ?? prev);
+      setType(draft.type);
+      setFrom(draft.from);
+      setTo(draft.to);
+      setReason(draft.reason);
       setFormError(err instanceof Error ? err.message : "Unable to submit your request. Please try again.");
     } finally {
-      setSaving(false);
+      setSending((s) => {
+        const n = new Set(s);
+        n.delete(tempId);
+        return n;
+      });
     }
   }
 
@@ -197,9 +237,8 @@ export default function MyLeavePage() {
                 {reason.length}/{REASON_MAX}
               </div>
             </div>
-            <button type="submit" disabled={saving} className={`${cls.btn} h-11 w-full`}>
-              {saving ? <Loader2 size={16} className="animate-spin" /> : <Send size={15} />}
-              {saving ? "Submitting…" : "Submit Request"}
+            <button type="submit" className={`${cls.btn} h-11 w-full`}>
+              <Send size={15} /> Submit Request
             </button>
           </form>
         </section>
@@ -251,7 +290,11 @@ export default function MyLeavePage() {
                         {range(l.StartDate, l.EndDate)} · {l.Days} day{l.Days === 1 ? "" : "s"}
                       </div>
                     </div>
-                    {l.Status === "Pending" && l.Source === "Employee" && (
+                    {sending.has(l.LeaveID) ? (
+                      <span className="inline-flex items-center gap-1.5 text-[12px] text-gray-500">
+                        <Loader2 size={13} className="animate-spin" /> Sending…
+                      </span>
+                    ) : l.Status === "Pending" && l.Source === "Employee" && (
                       <button onClick={() => cancel(l)} disabled={cancelling === l.LeaveID} className={`${cls.btnSecondary} ${cls.btnSmall}`}>
                         {cancelling === l.LeaveID ? <Loader2 size={13} className="animate-spin" /> : <X size={13} />}
                         {cancelling === l.LeaveID ? "Cancelling…" : "Cancel"}
@@ -267,7 +310,7 @@ export default function MyLeavePage() {
                     </div>
                   )}
                   <div className="mt-1.5 text-[11.5px] text-gray-400">
-                    {l.Source === "HR" ? "Recorded by HR" : l.FiledAt ? `Filed ${when(l.FiledAt)}` : ""}
+                    {l.Source === "HR" ? "Recorded by HR" : l.FiledAt ? `Filed ${when(l.FiledAt)}` : "Filed just now"}
                   </div>
                 </li>
               ))}
